@@ -146,6 +146,8 @@ let userName = "";
 let userStatus = "free";
 let userLanguage = localStorage.getItem("userLanguage") || "en";
 let currentLanguage = userLanguage;
+// Set browser reference language on page load
+document.documentElement.lang = userLanguage;
 let sessionMode = "create"; // "create" or "join"
 let joinSessionCode = null;
 let currentSessionCode = null;
@@ -394,6 +396,9 @@ function setLanguage(lang) {
   currentLanguage = lang;
   userLanguage = lang;
   localStorage.setItem("userLanguage", lang);
+  
+  // Set browser reference language
+  document.documentElement.lang = lang;
   
   // Update speech recognition language
   if (recognition) {
@@ -655,7 +660,8 @@ connectButton.addEventListener("click", () => {
           // Display with the sender's profile
           const senderProfile = message.payload.fromProfile;
           addMessageToConversation(message.payload.text, senderProfile);
-          // Don't auto-speak relayed messages, don't process further
+          // Play audio in current user's language after message is displayed
+          speakText(message.payload.text, currentLanguage);
           updateChatStatus("Ready");
         } 
         // Handle agent response or relayed agent response
