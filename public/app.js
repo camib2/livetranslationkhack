@@ -252,6 +252,13 @@ const setupVoiceRecognition = () => {
     }
     if (voiceStatus) voiceStatus.textContent = "Ready to listen";
     if (voiceIndicatorBottom) voiceIndicatorBottom.classList.add("hidden");
+    
+    // Auto-send transcribed message when listening ends
+    if (currentTranscript.trim()) {
+      setTimeout(() => {
+        sendTranscribedMessage(currentTranscript.trim());
+      }, 200);
+    }
   };
 };
 
@@ -720,10 +727,13 @@ messageInput.addEventListener("keydown", (e) => {
 });
 
 endSessionButton.addEventListener("click", () => {
-  if (confirm("Are you sure you want to end this session?")) {
-    sendEvent("session.end", {});
-    hideConversationView();
-  }
+  sendEvent("session.end", {});
+  hideConversationView();
+  showProfileModal();
+  currentTranscript = "";
+  allFinalTranscripts = [];
+  userProfile = null;
+  addLog("Session ended. Ready for a new session.");
 });
 
 speakButton.addEventListener("click", async () => {
