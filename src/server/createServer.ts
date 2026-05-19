@@ -185,36 +185,61 @@ export async function createServer() {
                 payload.userName
               );
 
-              if (!assignResult.success) {
-                // No available support agents - user needs to wait or join a pool
-                socket.send(
-                  JSON.stringify({
-                    type: "session.status",
-                    payload: {
-                      state: "listening",
-                      message: "No available support agents. Waiting for next available agent..."
-                    }
-                  } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
-                );
-                // For now, don't proceed with session creation - wait for manual intervention
-                return;
-              }
+              if (assignResult.success) {
+                // Successfully assigned to a support agent
+                currentSessionId = assignResult.sessionId!;
+                currentUserId = assignResult.session!.endUser!.id;
+                multiUserSession = assignResult.session!;
 
-              currentSessionId = assignResult.sessionId!;
-              currentUserId = assignResult.session!.endUser!.id;
-              multiUserSession = assignResult.session!;
+                // Notify support agent that user has joined
+                if (multiUserSession.supportUser) {
+                  multiUserSession.supportUser.socket.send(
+                    JSON.stringify({
+                      type: "session.status",
+                      payload: {
+                        state: "listening",
+                        message: `End user "${payload.userName || "User"}" joined your session`
+                      }
+                    } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
+                  );
+                }
+              } else {
+                // No available support agents - create a waiting session
+                const createResult = sessionManager.createSession(profile, expectedUserLanguage);
+                sessionCode = createResult.sessionCode;
+                currentSessionId = createResult.sessionId;
 
-              // Notify support agent that user has joined
-              if (multiUserSession.supportUser) {
-                multiUserSession.supportUser.socket.send(
-                  JSON.stringify({
-                    type: "session.status",
-                    payload: {
-                      state: "listening",
-                      message: `End user "${payload.userName || "User"}" joined your session`
-                    }
-                  } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
+                const addResult = sessionManager.addUserToSession(
+                  createResult.sessionId,
+                  profile,
+                  expectedUserLanguage,
+                  expectedUserLanguage,
+                  agentLanguage,
+                  socket,
+                  payload.userName
                 );
+
+                if (!addResult.success) {
+                  socket.send(
+                    JSON.stringify({
+                      type: "error",
+                      payload: {
+                        message: addResult.message
+                      }
+                    } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["error"] })
+                  );
+                  return;
+                }
+
+                multiUserSession = addResult.session!;
+
+                // Get the user ID
+                for (const [userId, user] of multiUserSession.users) {
+                  if (user.socket === socket) {
+                    currentUserId = userId;
+                    break;
+                  }
+                }
               }
             } else if (sessionMode === "join" && payload.joinCode && profile === "enduser") {
               // End user joining a support pool
@@ -332,7 +357,8 @@ export async function createServer() {
                 expectedUserLanguage,
                 expectedUserLanguage,
                 agentLanguage,
-                socket
+                socket,
+                payload.userName
               );
 
               if (!addResult.success) {

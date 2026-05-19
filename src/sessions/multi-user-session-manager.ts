@@ -77,7 +77,8 @@ export class SessionManager {
     language: string,
     expectedUserLanguage: string,
     agentLanguage: string,
-    socket: WebSocket
+    socket: WebSocket,
+    userName?: string
   ): { success: boolean; message: string; session?: MultiUserSession } {
     const session = this.sessions.get(sessionId);
     if (!session) {
@@ -91,7 +92,8 @@ export class SessionManager {
       language,
       socket,
       expectedUserLanguage,
-      agentLanguage
+      agentLanguage,
+      name: userName
     };
 
     // Add user to session
