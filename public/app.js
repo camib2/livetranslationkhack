@@ -232,11 +232,17 @@ const setupAudioRecording = async () => {
     // Connect to destination so audio context processes the stream
     if (audioContext.state === 'suspended') {
       audioContext.resume();
+      addLog("AudioContext resumed");
     }
+    
+    addLog(`✓ Audio context ready - sample rate: ${audioContext.sampleRate}Hz`);
+    console.log(`Audio setup: context=${audioContext.state}, fftSize=${analyser.fftSize}`);
     
     // Create MediaRecorder
     mediaRecorder = new MediaRecorder(mediaStream);
     recordedChunks = [];
+    addLog(`✓ MediaRecorder created - mimeType: ${mediaRecorder.mimeType}`);
+    console.log(`MediaRecorder: state=${mediaRecorder.state}, mimeType=${mediaRecorder.mimeType}`);
 
     mediaRecorder.ondataavailable = (event) => {
       recordedChunks.push(event.data);
@@ -284,6 +290,8 @@ const setupAudioRecording = async () => {
   }
 };
 
+let lastLogTime = 0;
+
 const startVoiceListening = async () => {
   if (!mediaRecorder) {
     addLog("Requesting microphone access...");
@@ -303,6 +311,7 @@ const startVoiceListening = async () => {
   isListening = true;
   recordedChunks = [];
   lastAudioTime = Date.now();
+  lastLogTime = Date.now();
 
   if (voiceStartButton) voiceStartButton.classList.add("hidden");
   if (voiceStopButton) voiceStopButton.classList.remove("hidden");
@@ -340,13 +349,26 @@ const startVoiceListening = async () => {
     }
     const average = sum / dataArray.length;
 
+    // Log audio levels periodically (every 1 second)
+    const now = Date.now();
+    if (now - lastLogTime > 1000) {
+      const silenceTime = (now - lastAudioTime) / 1000;
+      console.log(`🎤 Audio level: ${average.toFixed(1)} dB | Silence: ${silenceTime.toFixed(1)}s`);
+      addLog(`Audio: ${average.toFixed(1)} dB | Silence: ${silenceTime.toFixed(1)}s`);
+      lastLogTime = now;
+    }
+
     // If audio level is significant, update lastAudioTime
     if (average > 30) { // Threshold for detecting audio
       lastAudioTime = Date.now();
+      if (average > 50) {
+        console.log(`🔊 Audio detected! Level: ${average.toFixed(1)}`);
+      }
     }
 
     // Check if 2 seconds of silence
-    if (Date.now() - lastAudioTime > silenceTimeout) {
+    if (now - lastAudioTime > silenceTimeout) {
+      console.log(`⏹️ Silence timeout reached - stopping recording`);
       stopVoiceListening();
     }
   }, 100);
