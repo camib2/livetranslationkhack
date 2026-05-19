@@ -138,7 +138,7 @@ export async function createServer() {
 
         switch (event.type) {
           case "session.start": {
-            const payload = event.payload as ClientEventMap["session.start"] & { sessionMode?: string; joinCode?: string; profile?: string; userName?: string };
+            const payload = event.payload as ClientEventMap["session.start"] & { sessionMode?: string; joinCode?: string; profile?: string; userName?: string; status?: "free" | "busy" };
             const expectedUserLanguage = payload.expectedUserLanguage ?? payload.language ?? "en";
             const agentLanguage = payload.agentLanguage ?? payload.language ?? "en";
             const profile = (payload.profile as "support" | "enduser") || "enduser";
@@ -163,12 +163,16 @@ export async function createServer() {
               currentSessionId = poolResult.sessionId;
               sessionCode = poolResult.poolCode;
 
-              // Get the user ID
+              // Get the user ID and apply status
               const poolSession = sessionManager.getSessionForUser(poolResult.sessionId);
               if (poolSession) {
                 for (const [userId, user] of poolSession.users) {
                   if (user.socket === socket) {
                     currentUserId = userId;
+                    // Apply the status from payload if support agent
+                    if (payload.status) {
+                      user.status = payload.status;
+                    }
                     break;
                   }
                 }

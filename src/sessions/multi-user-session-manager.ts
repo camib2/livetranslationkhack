@@ -253,7 +253,8 @@ export class SessionManager {
       language,
       socket,
       expectedUserLanguage,
-      agentLanguage
+      agentLanguage,
+      status: "free" // Default support agents to free status
     };
 
     session.users.set(userId, user);
@@ -325,8 +326,12 @@ export class SessionManager {
   getAvailableSupportAgents(): MultiUserSession[] {
     const available: MultiUserSession[] = [];
     for (const session of this.poolSessions.values()) {
-      if (session.supportUser && session.supportUser.status === "free") {
-        available.push(session);
+      if (session.supportUser) {
+        // Treat undefined status as "free" by default
+        const status = session.supportUser.status || "free";
+        if (status === "free") {
+          available.push(session);
+        }
       }
     }
     return available;
