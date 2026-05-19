@@ -156,7 +156,6 @@ const profileModal = document.querySelector("#profileModal");
 const profileLanguageSelect = document.querySelector("#profileLanguageSelect");
 const profileSubmitButton = document.querySelector("#profileSubmitButton");
 const userNameInput = document.querySelector("#userNameInput");
-const supportStatusSection = document.querySelector("#supportStatusSection");
 const joinSessionSection = document.querySelector("#joinSessionSection");
 const sessionCodeInput = document.querySelector("#sessionCodeInput");
 
@@ -994,17 +993,16 @@ function updateSessionModeOptions() {
   if (!selectedProfile) return;
 
   if (selectedProfile.value === "support") {
-    // Show support modes and status, hide end user modes
+    // Show support modes, hide end user modes
+    // Status is automatically managed by app (free -> busy)
     if (endUserModes) endUserModes.classList.add("hidden");
     if (supportModes) supportModes.classList.remove("hidden");
-    if (supportStatusSection) supportStatusSection.classList.remove("hidden");
     if (joinSessionSection) joinSessionSection.classList.add("hidden");
     sessionMode = "pool"; // Default to pool mode for support
   } else {
-    // Show end user modes, hide support modes and status
+    // Show end user modes, hide support modes
     if (endUserModes) endUserModes.classList.remove("hidden");
     if (supportModes) supportModes.classList.add("hidden");
-    if (supportStatusSection) supportStatusSection.classList.add("hidden");
     // Don't show join session section - only pool joining via code
     if (joinSessionSection) joinSessionSection.classList.add("hidden");
     sessionMode = "create"; // Default to pool join mode for end user
