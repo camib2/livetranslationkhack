@@ -88,6 +88,21 @@
       </div>
     </div>
 
+    <!-- Waiting for Connection Screen -->
+    <div id="waitingView" class="modal hidden">
+      <div class="modal-content waiting-content">
+        <div class="waiting-container">
+          <div class="loading-spinner">
+            <div class="spinner-ring"></div>
+          </div>
+          <h2 id="waitingTitle" data-i18n="waiting_title">Connecting...</h2>
+          <p id="waitingMessage" data-i18n="waiting_message">Please wait while we connect you</p>
+          <p id="waitingSessionCode" class="session-code-display hidden"></p>
+          <button id="cancelWaitingButton" type="button" class="cancel-btn" data-i18n="button_cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <main class="shell conversation-view hidden" id="conversationView">
       <!-- Top Header with Session Info -->
       <div class="voice-header">

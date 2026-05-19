@@ -138,7 +138,7 @@ export async function createServer() {
 
         switch (event.type) {
           case "session.start": {
-            const payload = event.payload as ClientEventMap["session.start"] & { sessionMode?: string; joinCode?: string; profile?: string };
+            const payload = event.payload as ClientEventMap["session.start"] & { sessionMode?: string; joinCode?: string; profile?: string; userName?: string };
             const expectedUserLanguage = payload.expectedUserLanguage ?? payload.language ?? "en";
             const agentLanguage = payload.agentLanguage ?? payload.language ?? "en";
             const profile = (payload.profile as "support" | "enduser") || "enduser";
@@ -173,6 +173,48 @@ export async function createServer() {
                   }
                 }
                 multiUserSession = poolSession;
+              }
+            } else if (profile === "enduser" && (sessionMode === "create" || !payload.joinCode)) {
+              // End user auto-matching with available support agent
+              const assignResult = sessionManager.assignUserToAvailableAgent(
+                profile,
+                expectedUserLanguage,
+                expectedUserLanguage,
+                agentLanguage,
+                socket,
+                payload.userName
+              );
+
+              if (!assignResult.success) {
+                // No available support agents - user needs to wait or join a pool
+                socket.send(
+                  JSON.stringify({
+                    type: "session.status",
+                    payload: {
+                      state: "listening",
+                      message: "No available support agents. Waiting for next available agent..."
+                    }
+                  } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
+                );
+                // For now, don't proceed with session creation - wait for manual intervention
+                return;
+              }
+
+              currentSessionId = assignResult.sessionId!;
+              currentUserId = assignResult.session!.endUser!.id;
+              multiUserSession = assignResult.session!;
+
+              // Notify support agent that user has joined
+              if (multiUserSession.supportUser) {
+                multiUserSession.supportUser.socket.send(
+                  JSON.stringify({
+                    type: "session.status",
+                    payload: {
+                      state: "listening",
+                      message: `End user "${payload.userName || "User"}" joined your session`
+                    }
+                  } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
+                );
               }
             } else if (sessionMode === "join" && payload.joinCode && profile === "enduser") {
               // End user joining a support pool

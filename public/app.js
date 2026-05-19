@@ -24,6 +24,10 @@ const i18n = {
     button_replay: "Replay Last Reply",
     button_send: "Send Transcript",
     button_clear: "Clear",
+    button_cancel: "Cancel",
+    waiting_title: "Connecting...",
+    waiting_message: "Please wait while we connect you to an available agent",
+    waiting_support: "Waiting for users to join...",
     eyebrow: "Voice Agent Demo",
     title: "Live Translation Console",
     subtitle: "Record a customer turn, transcribe it with Speechmatics, route the transcript through the agent, and play the returned voice response.",
@@ -66,6 +70,10 @@ const i18n = {
     button_replay: "Riproduci risposta",
     button_send: "Invia trascrizione",
     button_clear: "Cancella",
+    button_cancel: "Annulla",
+    waiting_title: "Connessione...",
+    waiting_message: "Attendere mentre ti connettiamo a un agente disponibile",
+    waiting_support: "Attesa di utenti...",
     eyebrow: "Demo agente vocale",
     title: "Console di traduzione dal vivo",
     subtitle: "Registra un turno del cliente, trascrivilo con Speechmatics, instrada la trascrizione attraverso l'agente e riproduci la risposta vocale restituita.",
@@ -108,6 +116,10 @@ const i18n = {
     button_replay: "Toista vastaus uudelleen",
     button_send: "Lähetä litterointi",
     button_clear: "Tyhjennä",
+    button_cancel: "Peruuta",
+    waiting_title: "Yhdistäminen...",
+    waiting_message: "Odota, kun yhdistämme sinut käytettävissä olevaan agentiin",
+    waiting_support: "Odottamassa käyttäjiä liittyä...",
     eyebrow: "Ääniagenttidemo",
     title: "Live-käännöskonsooli",
     subtitle: "Tallenna asiakaskierros, litterooi se Speechmaticsin avulla, reitita litterointi agentin kautta ja toista palautettu äänivastaus.",
@@ -154,6 +166,9 @@ const chatStatus = document.querySelector("#chatStatus");
 const messageInput = document.querySelector("#messageInput");
 const sendMessageButton = document.querySelector("#sendMessageButton");
 const endSessionButton = document.querySelector("#endSessionButton");
+
+// Waiting view elements
+const cancelWaitingButton = document.querySelector("#cancelWaitingButton");
 
 const connectButton = document.querySelector("#connectButton");
 const disconnectButton = document.querySelector("#disconnectButton");
@@ -604,6 +619,7 @@ connectButton.addEventListener("click", () => {
         let sessionCode = message.payload.sessionCode || "Unknown";
         updateChatSessionCode(sessionCode);
         updateChatStatus("Ready");
+        hideWaitingView(); // Hide waiting screen
         showConversationView();
         
         if (message.payload.sessionCode) {
@@ -757,6 +773,19 @@ endSessionButton.addEventListener("click", () => {
   addLog("Session ended. Ready for a new session.");
 });
 
+cancelWaitingButton.addEventListener("click", () => {
+  hideWaitingView();
+  showProfileModal();
+  // Disconnect from server
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.close();
+  }
+  currentTranscript = "";
+  allFinalTranscripts = [];
+  userProfile = null;
+  addLog("Connection cancelled. Returning to profile selection.");
+});
+
 speakButton.addEventListener("click", async () => {
   if (recorder && recorder.state === "recording") {
     stopRecording();
@@ -788,6 +817,35 @@ function showConversationView() {
 function hideConversationView() {
   conversationView.classList.add("hidden");
   conversationContainer.innerHTML = ""; // Clear messages
+}
+
+function showWaitingView(isSupport, sessionCode = null) {
+  const waitingView = document.getElementById("waitingView");
+  const waitingTitle = document.getElementById("waitingTitle");
+  const waitingMessage = document.getElementById("waitingMessage");
+  const waitingSessionCode = document.getElementById("waitingSessionCode");
+  
+  waitingView.classList.remove("hidden");
+  
+  if (isSupport) {
+    waitingTitle.textContent = t("waiting_title");
+    waitingMessage.textContent = t("waiting_support");
+    if (sessionCode) {
+      waitingSessionCode.textContent = `Session Code: ${sessionCode}`;
+      waitingSessionCode.classList.remove("hidden");
+    } else {
+      waitingSessionCode.classList.add("hidden");
+    }
+  } else {
+    waitingTitle.textContent = t("waiting_title");
+    waitingMessage.textContent = t("waiting_message");
+    waitingSessionCode.classList.add("hidden");
+  }
+}
+
+function hideWaitingView() {
+  const waitingView = document.getElementById("waitingView");
+  waitingView.classList.add("hidden");
 }
 
 function updateChatStatus(status) {
@@ -989,6 +1047,9 @@ profileSubmitButton.addEventListener("click", () => {
   if (joinSessionCode) {
     addLog(`Joining session: ${joinSessionCode}`);
   }
+  
+  // Show waiting view
+  showWaitingView(userProfile === "support");
   
   // Automatically start the WebSocket connection
   setTimeout(() => {
