@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Translation Demo Console</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Voice Agent Demo</p>
+        <h1>Live Translation Console</h1>
+        <p class="lede">
+          Record a customer turn, transcribe it with Speechmatics, route the transcript through the
+          agent, and play the returned voice response.
+        </p>
+      </section>
+
+      <section class="panel controls">
+        <div class="row">
+          <label>
+            <span>Agent language</span>
+            <select id="agentLanguage">
+              <option value="en">English</option>
+              <option value="it">Italian</option>
+              <option value="fi">Finnish</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Expected user language</span>
+            <select id="expectedUserLanguage">
+              <option value="en">English</option>
+              <option value="it">Italian</option>
+              <option value="fi">Finnish</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Session</span>
+            <input id="sessionId" type="text" readonly value="Not started" />
+          </label>
+
+          <label>
+            <span>Status</span>
+            <input id="status" type="text" readonly value="Disconnected" />
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="connectButton" type="button">Start Session</button>
+          <button id="disconnectButton" type="button" disabled>End Session</button>
+          <button id="speakButton" type="button" disabled>Start Recording</button>
+          <button id="replayButton" type="button" disabled>Replay Last Reply</button>
+        </div>
+      </section>
+
+      <section class="grid">
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Transcript Input</h2>
+            <p>Speechmatics transcript or manual test utterance.</p>
+          </div>
+          <textarea
+            id="transcriptInput"
+            rows="8"
+            placeholder="Example: I need help checking the status of my last support case."
+          ></textarea>
+          <div class="actions">
+            <button id="sendTranscriptButton" type="button" disabled>Send Transcript</button>
+            <button id="clearTranscriptButton" type="button">Clear</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Agent Output</h2>
+            <p>Response text returned by the backend and spoken locally if no audio bytes exist yet.</p>
+          </div>
+          <textarea id="agentResponse" rows="8" readonly placeholder="Agent reply will appear here."></textarea>
+          <audio id="audioPlayer" controls></audio>
+        </section>
+      </section>
+
+      <section class="grid">
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Event Timeline</h2>
+            <p>WebSocket-level lifecycle for debugging the pipeline.</p>
+          </div>
+          <ol id="eventLog" class="log"></ol>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Usage Notes</h2>
+          </div>
+          <ul class="notes">
+            <li>Recording sends audio to the middleware, then to Speechmatics STT.</li>
+            <li>Manual transcript still bypasses STT for fast agent testing.</li>
+            <li>The TTS provider is still stubbed, so the page uses browser playback fallback.</li>
+          </ul>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>
