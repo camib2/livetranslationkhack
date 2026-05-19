@@ -19,8 +19,9 @@ export class VertexAgentClient {
     }
 
     // TODO: replace this placeholder with a real Vertex agent call.
+    // For now, return a simple acknowledgment without the "Acknowledged:" prefix
     return {
-      text: `Acknowledged: ${normalizedText}`
+      text: `Your message has been received: ${normalizedText}`
     };
   }
 }

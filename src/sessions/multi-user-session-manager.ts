@@ -7,6 +7,8 @@ export interface SessionUser {
   socket: WebSocket;
   expectedUserLanguage: string;
   agentLanguage: string;
+  name?: string;
+  status?: "free" | "busy"; // For support agents
 }
 
 export interface MultiUserSession {
@@ -313,6 +315,81 @@ export class SessionManager {
    */
   isPoolWaiting(poolCode: string): boolean {
     return this.poolSessions.has(poolCode);
+  }
+
+  /**
+   * Get available support agents (status = "free")
+   */
+  getAvailableSupportAgents(): MultiUserSession[] {
+    const available: MultiUserSession[] = [];
+    for (const session of this.poolSessions.values()) {
+      if (session.supportUser && session.supportUser.status === "free") {
+        available.push(session);
+      }
+    }
+    return available;
+  }
+
+  /**
+   * Assign an end user to the first available support agent
+   */
+  assignUserToAvailableAgent(
+    profile: "enduser",
+    language: string,
+    expectedUserLanguage: string,
+    agentLanguage: string,
+    socket: WebSocket,
+    userName?: string
+  ): { success: boolean; message: string; sessionId?: string; session?: MultiUserSession; supportAgent?: SessionUser } {
+    const availableAgents = this.getAvailableSupportAgents();
+    
+    if (availableAgents.length === 0) {
+      return { success: false, message: "No available support agents" };
+    }
+
+    // Take the first available agent
+    const agentSession = availableAgents[0];
+    
+    // Add the end user to this session
+    const userId = this.generateUserId();
+    const user: SessionUser = {
+      id: userId,
+      profile,
+      language,
+      socket,
+      expectedUserLanguage,
+      agentLanguage,
+      name: userName
+    };
+
+    agentSession.users.set(userId, user);
+    this.userSessions.set(userId, agentSession);
+    agentSession.endUser = user;
+
+    // Remove from pool sessions since it's now matched
+    this.poolSessions.delete(agentSession.code);
+    agentSession.isPoolSession = false;
+
+    return {
+      success: true,
+      message: "Assigned to support agent",
+      sessionId: agentSession.id,
+      session: agentSession,
+      supportAgent: agentSession.supportUser
+    };
+  }
+
+  /**
+   * Update support agent status
+   */
+  updateAgentStatus(userId: string, status: "free" | "busy"): { success: boolean; message: string } {
+    const session = this.userSessions.get(userId);
+    if (!session || !session.supportUser || session.supportUser.id !== userId) {
+      return { success: false, message: "User not found or not a support agent" };
+    }
+
+    session.supportUser.status = status;
+    return { success: true, message: `Agent status updated to ${status}` };
   }
 }
 

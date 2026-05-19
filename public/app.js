@@ -5,6 +5,10 @@ const i18n = {
     select_profile: "Who are you?",
     profile_support: "IT Support",
     profile_enduser: "End User",
+    user_name_label: "Your Name",
+    support_status_label: "Your Status",
+    status_free: "Available",
+    status_busy: "Busy",
     select_language: "Select your language",
     session_type: "Session Mode",
     session_create: "Join Support Session",
@@ -43,6 +47,10 @@ const i18n = {
     select_profile: "Chi sei?",
     profile_support: "Supporto IT",
     profile_enduser: "Utente finale",
+    user_name_label: "Il tuo nome",
+    support_status_label: "Il tuo stato",
+    status_free: "Disponibile",
+    status_busy: "Occupato",
     select_language: "Seleziona la tua lingua",
     session_type: "Modalità sessione",
     session_create: "Unisciti a sessione di supporto",
@@ -81,6 +89,10 @@ const i18n = {
     select_profile: "Kuka olet?",
     profile_support: "IT-tuki",
     profile_enduser: "Loppukäyttäjä",
+    user_name_label: "Sinun nimesi",
+    support_status_label: "Sinun tilasi",
+    status_free: "Saatavilla",
+    status_busy: "Varattu",
     select_language: "Valitse kielesi",
     session_type: "Istunnon tila",
     session_create: "Liity tukistuntoon",
@@ -118,6 +130,8 @@ const i18n = {
 
 // State management
 let userProfile = null;
+let userName = "";
+let userStatus = "free";
 let userLanguage = localStorage.getItem("userLanguage") || "en";
 let currentLanguage = userLanguage;
 let sessionMode = "create"; // "create" or "join"
@@ -127,6 +141,8 @@ let currentSessionCode = null;
 const profileModal = document.querySelector("#profileModal");
 const profileLanguageSelect = document.querySelector("#profileLanguageSelect");
 const profileSubmitButton = document.querySelector("#profileSubmitButton");
+const userNameInput = document.querySelector("#userNameInput");
+const supportStatusSection = document.querySelector("#supportStatusSection");
 const joinSessionSection = document.querySelector("#joinSessionSection");
 const sessionCodeInput = document.querySelector("#sessionCodeInput");
 
@@ -536,8 +552,13 @@ connectButton.addEventListener("click", () => {
     const payload = {
       ...getSelectedLanguages(),
       profile: userProfile,
-      sessionMode: sessionMode
+      sessionMode: sessionMode,
+      userName: userName
     };
+    
+    if (userProfile === "support") {
+      payload.status = userStatus;
+    }
     
     if (sessionMode === "join" && joinSessionCode) {
       payload.joinCode = joinSessionCode;
@@ -849,20 +870,23 @@ function updateSessionModeOptions() {
   const selectedProfile = document.querySelector('input[name="profile"]:checked');
   const endUserModes = document.querySelector("#endUserModes");
   const supportModes = document.querySelector("#supportModes");
+  const supportStatusSection = document.querySelector("#supportStatusSection");
   const joinSessionSection = document.querySelector("#joinSessionSection");
   
   if (!selectedProfile) return;
 
   if (selectedProfile.value === "support") {
-    // Show support modes, hide end user modes
+    // Show support modes and status, hide end user modes
     if (endUserModes) endUserModes.classList.add("hidden");
     if (supportModes) supportModes.classList.remove("hidden");
+    if (supportStatusSection) supportStatusSection.classList.remove("hidden");
     if (joinSessionSection) joinSessionSection.classList.add("hidden");
     sessionMode = "pool"; // Default to pool mode for support
   } else {
-    // Show end user modes, hide support modes
+    // Show end user modes, hide support modes and status
     if (endUserModes) endUserModes.classList.remove("hidden");
     if (supportModes) supportModes.classList.add("hidden");
+    if (supportStatusSection) supportStatusSection.classList.add("hidden");
     // Don't show join session section - only pool joining via code
     if (joinSessionSection) joinSessionSection.classList.add("hidden");
     sessionMode = "create"; // Default to pool join mode for end user
@@ -888,11 +912,25 @@ profileSubmitButton.addEventListener("click", () => {
     return;
   }
 
+  // Validate user name
+  const nameValue = userNameInput.value.trim();
+  if (!nameValue) {
+    alert("Please enter your name");
+    return;
+  }
+
   const selectedProfile = document.querySelector('input[name="profile"]:checked');
   const selectedMode = document.querySelector('input[name="sessionMode"]:checked');
   
   userProfile = selectedProfile.value;
+  userName = nameValue;
   sessionMode = selectedMode?.value || "create";
+  
+  // Get support status if support agent
+  if (userProfile === "support") {
+    const statusRadio = document.querySelector('input[name="supportStatus"]:checked');
+    userStatus = statusRadio?.value || "free";
+  }
   
   if (sessionMode === "join") {
     const code = sessionCodeInput.value.trim().toUpperCase();
@@ -913,7 +951,10 @@ profileSubmitButton.addEventListener("click", () => {
   }
 
   hideProfileModal();
-  addLog(`Profile selected: ${userProfile} (${userLanguage}) - Mode: ${sessionMode}`);
+  addLog(`Profile selected: ${userProfile} (${userName}) (${userLanguage}) - Mode: ${sessionMode}`);
+  if (userProfile === "support") {
+    addLog(`Support Status: ${userStatus}`);
+  }
   if (joinSessionCode) {
     addLog(`Joining session: ${joinSessionCode}`);
   }
