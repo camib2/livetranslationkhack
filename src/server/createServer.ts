@@ -9,6 +9,7 @@ import { VertexAgentClient } from "../providers/vertex/agent-client.js";
 import { registerDemoRoutes } from "../routes/demo.js";
 import { registerHealthRoute } from "../routes/health.js";
 import { SessionStore } from "../sessions/session-store.js";
+import { sessionManager } from "../sessions/multi-user-session-manager.js";
 import type { ClientEventMap, ServerEventMap } from "../types/session.js";
 
 export async function createServer() {
@@ -30,6 +31,9 @@ export async function createServer() {
 
   app.get("/ws/voice", { websocket: true }, (socket) => {
     let currentSessionId: string | null = null;
+    let orchestratorSessionId: string | null = null;
+    let currentUserId: string | null = null;
+    let userProfile: "support" | "enduser" | null = null;
 
     async function processFinalTranscript(sessionId: string, text: string): Promise<void> {
       socket.send(
@@ -41,6 +45,24 @@ export async function createServer() {
           }
         } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
       );
+
+      // Relay user's message to other user in multi-user session first
+      const multiUserSession = sessionManager.getSessionForUser(currentUserId!);
+      if (multiUserSession && multiUserSession.users.size > 1) {
+        const otherUsers = sessionManager.getOtherUsersInSession(currentUserId!);
+        for (const otherUser of otherUsers) {
+          otherUser.socket.send(
+            JSON.stringify({
+              type: "agent.response",
+              payload: {
+                text: text,
+                fromProfile: userProfile,
+                isUserMessage: true
+              }
+            })
+          );
+        }
+      }
 
       const result = await orchestrator.handleFinalTranscript(sessionId, text);
 
@@ -73,6 +95,23 @@ export async function createServer() {
           }
         } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
       );
+
+      // Relay agent response to other user in multi-user session
+      if (multiUserSession && multiUserSession.users.size > 1) {
+        const otherUsers = sessionManager.getOtherUsersInSession(currentUserId!);
+        for (const otherUser of otherUsers) {
+          otherUser.socket.send(
+            JSON.stringify({
+              type: "agent.response",
+              payload: {
+                text: result.responseText,
+                fromProfile: "support",
+                isAgentResponse: true
+              }
+            })
+          );
+        }
+      }
     }
 
     socket.on("message", async (rawMessage: Buffer | string) => {
@@ -84,16 +123,191 @@ export async function createServer() {
 
         switch (event.type) {
           case "session.start": {
-            const payload = event.payload as ClientEventMap["session.start"];
+            const payload = event.payload as ClientEventMap["session.start"] & { sessionMode?: string; joinCode?: string; profile?: string };
             const expectedUserLanguage = payload.expectedUserLanguage ?? payload.language ?? "en";
             const agentLanguage = payload.agentLanguage ?? payload.language ?? "en";
-            const session = sessionStore.create({ expectedUserLanguage, agentLanguage });
-            currentSessionId = session.id;
+            const profile = (payload.profile as "support" | "enduser") || "enduser";
+            const sessionMode = payload.sessionMode || "create";
+            
+            userProfile = profile;
 
-            sessionStore.update(session.id, { state: "listening" });
+            let multiUserSession;
+            let sessionCode: string | undefined;
+
+            // Create or join session
+            if (sessionMode === "pool" && profile === "support") {
+              // Support agent creates a pool session to wait for users
+              const poolResult = sessionManager.createPoolSession(
+                profile,
+                expectedUserLanguage,
+                expectedUserLanguage,
+                agentLanguage,
+                socket
+              );
+
+              currentSessionId = poolResult.sessionId;
+              sessionCode = poolResult.poolCode;
+
+              // Get the user ID
+              const poolSession = sessionManager.getSessionForUser(poolResult.sessionId);
+              if (poolSession) {
+                for (const [userId, user] of poolSession.users) {
+                  if (user.socket === socket) {
+                    currentUserId = userId;
+                    break;
+                  }
+                }
+                multiUserSession = poolSession;
+              }
+            } else if (sessionMode === "join" && payload.joinCode && profile === "enduser") {
+              // End user joining a support pool
+              const joinPoolResult = sessionManager.joinPoolSession(
+                payload.joinCode,
+                profile,
+                expectedUserLanguage,
+                expectedUserLanguage,
+                agentLanguage,
+                socket
+              );
+
+              if (!joinPoolResult.success) {
+                // Try regular session join as fallback
+                const joinResult = sessionManager.joinSessionByCode(
+                  payload.joinCode,
+                  profile,
+                  expectedUserLanguage,
+                  expectedUserLanguage,
+                  agentLanguage,
+                  socket
+                );
+
+                if (!joinResult.success) {
+                  socket.send(
+                    JSON.stringify({
+                      type: "error",
+                      payload: {
+                        message: joinResult.message
+                      }
+                    } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["error"] })
+                  );
+                  return;
+                }
+
+                currentSessionId = joinResult.sessionId!;
+                multiUserSession = joinResult.session!;
+
+                // Get the user ID from the session (it's the newly added user)
+                for (const [userId, user] of multiUserSession.users) {
+                  if (user.socket === socket) {
+                    currentUserId = userId;
+                    break;
+                  }
+                }
+              } else {
+                // Successfully joined pool
+                currentSessionId = joinPoolResult.sessionId!;
+                multiUserSession = joinPoolResult.session!;
+                sessionCode = multiUserSession.code; // Set the pool code for the response
+
+                // Get the user ID
+                for (const [userId, user] of multiUserSession.users) {
+                  if (user.socket === socket) {
+                    currentUserId = userId;
+                    break;
+                  }
+                }
+
+                // Notify support agent that user has joined
+                if (multiUserSession && multiUserSession.supportUser) {
+                  multiUserSession.supportUser.socket.send(
+                    JSON.stringify({
+                      type: "session.status",
+                      payload: {
+                        state: "listening",
+                        message: "An end user has joined your support session"
+                      }
+                    } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
+                  );
+                }
+              }
+            } else if (sessionMode === "join" && payload.joinCode) {
+              // Join existing session
+              const joinResult = sessionManager.joinSessionByCode(
+                payload.joinCode,
+                profile,
+                expectedUserLanguage,
+                expectedUserLanguage,
+                agentLanguage,
+                socket
+              );
+
+              if (!joinResult.success) {
+                socket.send(
+                  JSON.stringify({
+                    type: "error",
+                    payload: {
+                      message: joinResult.message
+                    }
+                  } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["error"] })
+                );
+                return;
+              }
+
+              currentSessionId = joinResult.sessionId!;
+              multiUserSession = joinResult.session!;
+
+              // Get the user ID from the session (it's the newly added user)
+              for (const [userId, user] of multiUserSession.users) {
+                if (user.socket === socket) {
+                  currentUserId = userId;
+                  break;
+                }
+              }
+            } else {
+              // Create new session
+              const createResult = sessionManager.createSession(profile, expectedUserLanguage);
+              sessionCode = createResult.sessionCode;
+              currentSessionId = createResult.sessionId;
+
+              const addResult = sessionManager.addUserToSession(
+                createResult.sessionId,
+                profile,
+                expectedUserLanguage,
+                expectedUserLanguage,
+                agentLanguage,
+                socket
+              );
+
+              if (!addResult.success) {
+                socket.send(
+                  JSON.stringify({
+                    type: "error",
+                    payload: {
+                      message: addResult.message
+                    }
+                  } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["error"] })
+                );
+                return;
+              }
+
+              multiUserSession = addResult.session!;
+
+              // Get the user ID
+              for (const [userId, user] of multiUserSession.users) {
+                if (user.socket === socket) {
+                  currentUserId = userId;
+                  break;
+                }
+              }
+            }
+
+            // Also create session store for compatibility with existing orchestrator
+            const storeSession = sessionStore.create({ expectedUserLanguage, agentLanguage });
+            orchestratorSessionId = storeSession.id;
+
             await sttClient.startRealtimeSession({
-              sessionId: session.id,
-              language: session.expectedUserLanguage
+              sessionId: orchestratorSessionId!,
+              language: expectedUserLanguage
             });
 
             socket.send(
@@ -101,41 +315,60 @@ export async function createServer() {
                 type: "session.status",
                 payload: {
                   state: "listening",
-                  message: "Session started"
+                  message: sessionMode === "create" ? "Session created, waiting for support agent..." : "Session joined successfully"
                 }
               } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
             );
 
-            const response: { type: keyof ServerEventMap; payload: ServerEventMap["session.ready"] } = {
+            const response: { type: keyof ServerEventMap; payload: any } = {
               type: "session.ready",
               payload: {
-                sessionId: session.id,
-                expectedUserLanguage: session.expectedUserLanguage,
-                agentLanguage: session.agentLanguage
+                sessionId: currentSessionId,
+                expectedUserLanguage,
+                agentLanguage,
+                ...(sessionCode && { sessionCode })
               }
             };
 
             socket.send(JSON.stringify(response));
+
+            // Notify other user if both are connected
+            if (multiUserSession && multiUserSession.users.size > 1) {
+              for (const [, otherUser] of multiUserSession.users) {
+                if (otherUser.socket !== socket) {
+                  otherUser.socket.send(
+                    JSON.stringify({
+                      type: "session.status",
+                      payload: {
+                        state: "ready",
+                        message: `${profile === "support" ? "End User" : "Support Agent"} has joined the session`
+                      }
+                    })
+                  );
+                }
+              }
+            }
+
             return;
           }
 
           case "transcript.final": {
-            if (!currentSessionId) {
+            if (!orchestratorSessionId) {
               throw new Error("Session has not been started");
             }
 
             const payload = event.payload as ClientEventMap["transcript.final"];
-            await processFinalTranscript(currentSessionId, payload.text);
+            await processFinalTranscript(orchestratorSessionId, payload.text);
             return;
           }
 
           case "audio.recorded": {
-            if (!currentSessionId) {
+            if (!orchestratorSessionId) {
               throw new Error("Session has not been started");
             }
 
             const payload = event.payload as ClientEventMap["audio.recorded"];
-            const session = sessionStore.get(currentSessionId);
+            const session = sessionStore.get(orchestratorSessionId);
 
             if (!session) {
               throw new Error(`Session not found: ${currentSessionId}`);
@@ -174,13 +407,16 @@ export async function createServer() {
               } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["transcript.final"] })
             );
 
-            await processFinalTranscript(currentSessionId, transcription.agentInputText);
+            await processFinalTranscript(orchestratorSessionId, transcription.agentInputText);
             return;
           }
 
           case "session.end": {
-            if (currentSessionId) {
-              sessionStore.close(currentSessionId);
+            if (orchestratorSessionId) {
+              sessionStore.close(orchestratorSessionId);
+            }
+            if (currentSessionId && currentUserId) {
+              sessionManager.removeUserFromSession(currentUserId);
             }
             socket.send(
               JSON.stringify({
