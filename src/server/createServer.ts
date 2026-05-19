@@ -41,12 +41,12 @@ export async function createServer() {
           type: "session.status",
           payload: {
             state: "thinking",
-            message: "Agent is processing the finalized transcript"
+            message: "Processing..."
           }
         } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
       );
 
-      // Relay user's message to other user in multi-user session first
+      // Relay user's message to other user in multi-user session
       const multiUserSession = sessionManager.getSessionForUser(currentUserId!);
       if (multiUserSession && multiUserSession.users.size > 1) {
         const otherUsers = sessionManager.getOtherUsersInSession(currentUserId!);
@@ -64,53 +64,68 @@ export async function createServer() {
         }
       }
 
-      const result = await orchestrator.handleFinalTranscript(sessionId, text);
+      // Only get agent response if this is not a multi-user session
+      // (in multi-user sessions, support agents talk to each other, not to bot)
+      if (!multiUserSession || multiUserSession.users.size <= 1) {
+        const result = await orchestrator.handleFinalTranscript(sessionId, text);
 
-      socket.send(
-        JSON.stringify({
-          type: "agent.response",
-          payload: {
-            text: result.responseText
+        socket.send(
+          JSON.stringify({
+            type: "agent.response",
+            payload: {
+              text: result.responseText
+            }
+          } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["agent.response"] })
+        );
+
+        socket.send(
+          JSON.stringify({
+            type: "tts.ready",
+            payload: {
+              text: result.responseText,
+              audioBase64: result.audio.length > 0 ? result.audio.toString("base64") : undefined,
+              mimeType: result.audio.length > 0 ? "audio/wav" : undefined
+            }
+          } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["tts.ready"] })
+        );
+
+        socket.send(
+          JSON.stringify({
+            type: "session.status",
+            payload: {
+              state: "listening",
+              message: "Ready for the next turn"
+            }
+          } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
+        );
+
+        // Relay agent response to other user in multi-user session
+        if (multiUserSession && multiUserSession.users.size > 1) {
+          const otherUsers = sessionManager.getOtherUsersInSession(currentUserId!);
+          for (const otherUser of otherUsers) {
+            otherUser.socket.send(
+              JSON.stringify({
+                type: "agent.response",
+                payload: {
+                  text: result.responseText,
+                  fromProfile: "support",
+                  isAgentResponse: true
+                }
+              })
+            );
           }
-        } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["agent.response"] })
-      );
-
-      socket.send(
-        JSON.stringify({
-          type: "tts.ready",
-          payload: {
-            text: result.responseText,
-            audioBase64: result.audio.length > 0 ? result.audio.toString("base64") : undefined,
-            mimeType: result.audio.length > 0 ? "audio/wav" : undefined
-          }
-        } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["tts.ready"] })
-      );
-
-      socket.send(
-        JSON.stringify({
-          type: "session.status",
-          payload: {
-            state: "listening",
-            message: "Ready for the next turn"
-          }
-        } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
-      );
-
-      // Relay agent response to other user in multi-user session
-      if (multiUserSession && multiUserSession.users.size > 1) {
-        const otherUsers = sessionManager.getOtherUsersInSession(currentUserId!);
-        for (const otherUser of otherUsers) {
-          otherUser.socket.send(
-            JSON.stringify({
-              type: "agent.response",
-              payload: {
-                text: result.responseText,
-                fromProfile: "support",
-                isAgentResponse: true
-              }
-            })
-          );
         }
+      } else {
+        // Multi-user session - just confirm message received
+        socket.send(
+          JSON.stringify({
+            type: "session.status",
+            payload: {
+              state: "listening",
+              message: "Message sent"
+            }
+          } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
+        );
       }
     }
 

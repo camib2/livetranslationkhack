@@ -193,6 +193,9 @@ let recognition = null;
 let isListening = false;
 let currentTranscript = "";
 let allFinalTranscripts = [];
+let silenceTimer = null;
+let silenceTimeout = 2000; // 2 seconds of silence before sending
+let messageSent = false; // Track if message already sent to prevent duplicates
 
 const setupVoiceRecognition = () => {
   if (!SpeechRecognition) {
@@ -208,6 +211,7 @@ const setupVoiceRecognition = () => {
 
   recognition.onstart = () => {
     isListening = true;
+    messageSent = false; // Reset for new listening session
     if (voiceStartButton) voiceStartButton.classList.add("hidden");
     if (voiceStopButton) voiceStopButton.classList.remove("hidden");
     if (voiceIndicator) {
@@ -221,12 +225,14 @@ const setupVoiceRecognition = () => {
 
   recognition.onresult = (event) => {
     let interim = "";
+    let hasFinalResult = false;
     
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const transcript = event.results[i][0].transcript;
       if (event.results[i].isFinal) {
         currentTranscript += transcript + " ";
         allFinalTranscripts.push(transcript);
+        hasFinalResult = true;
       } else {
         interim += transcript;
       }
@@ -234,15 +240,28 @@ const setupVoiceRecognition = () => {
 
     if (interimTranscript) interimTranscript.textContent = interim;
     if (finalTranscript) finalTranscript.textContent = currentTranscript;
+    
+    // Reset silence timer whenever we get a final result
+    if (hasFinalResult) {
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        // 2 seconds of silence detected - stop listening and send message
+        if (recognition && isListening) {
+          recognition.stop();
+        }
+      }, silenceTimeout);
+    }
   };
 
   recognition.onerror = (event) => {
     console.error("Speech recognition error:", event.error);
     if (voiceStatus) voiceStatus.textContent = `Error: ${event.error}`;
     if (voiceStatusBottom) voiceStatusBottom.textContent = `Error: ${event.error}`;
+    clearTimeout(silenceTimer);
   };
 
   recognition.onend = () => {
+    clearTimeout(silenceTimer);
     isListening = false;
     if (voiceStartButton) voiceStartButton.classList.remove("hidden");
     if (voiceStopButton) voiceStopButton.classList.add("hidden");
@@ -253,11 +272,9 @@ const setupVoiceRecognition = () => {
     if (voiceStatus) voiceStatus.textContent = "Ready to listen";
     if (voiceIndicatorBottom) voiceIndicatorBottom.classList.add("hidden");
     
-    // Auto-send transcribed message when listening ends
-    if (currentTranscript.trim()) {
-      setTimeout(() => {
-        sendTranscribedMessage(currentTranscript.trim());
-      }, 200);
+    // Auto-send transcribed message after recognition ends (only if not already sent)
+    if (!messageSent && currentTranscript.trim()) {
+      sendTranscribedMessage(currentTranscript.trim());
     }
   };
 };
@@ -286,23 +303,27 @@ const startVoiceListening = () => {
 const stopVoiceListening = () => {
   if (recognition && isListening) {
     recognition.stop();
-    
-    // If there's transcribed text, send it
-    if (currentTranscript.trim()) {
-      setTimeout(() => {
-        sendTranscribedMessage(currentTranscript.trim());
-      }, 300);
-    }
+    // Let recognition.onend handle sending the message
   }
 };
 
 const sendTranscribedMessage = (text) => {
   if (!text.trim()) return;
+  
+  // Prevent duplicate sends
+  if (messageSent) return;
+  messageSent = true;
 
   addLog(`Voice input sent: "${text}"`);
   addMessageToConversation(text, userProfile, null, false);
   sendEvent("transcript.final", { text });
   updateChatStatus("Processing...");
+  
+  // Clear transcript after sending
+  currentTranscript = "";
+  allFinalTranscripts = [];
+  if (interimTranscript) interimTranscript.textContent = "";
+  if (finalTranscript) finalTranscript.textContent = "";
 };
 
 const clearVoiceTranscript = () => {
