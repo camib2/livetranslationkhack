@@ -199,103 +199,180 @@ const finalTranscript = document.querySelector("#finalTranscript");
 const transcriptionDisplay = document.querySelector("#transcriptionDisplay");
 
 let socket = null;
-let recorder = null;
+let mediaRecorder = null;
 let mediaStream = null;
 let recordedChunks = [];
 let lastReplyText = "";
 
-// Web Speech API setup
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
+// Audio recording setup (replaces Web Speech API with MediaRecorder)
 let isListening = false;
-let currentTranscript = "";
-let allFinalTranscripts = [];
-let silenceTimer = null;
+let silenceDetector = null;
 let silenceTimeout = 2000; // 2 seconds of silence before sending
-let messageSent = false; // Track if message already sent to prevent duplicates
+let lastAudioTime = 0;
+let silenceCheckInterval = null;
+let audioContext = null;
+let analyser = null;
 
-const setupVoiceRecognition = () => {
-  if (!SpeechRecognition) {
-    console.warn("Speech Recognition API not supported");
-    if (voiceStartButton) voiceStartButton.disabled = true;
+// Check if microphone is supported
+const microphoneSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+const setupAudioRecording = async () => {
+  try {
+    if (!microphoneSupported) {
+      throw new Error("Your browser does not support microphone access. Please use Chrome, Firefox, or Safari.");
+    }
+    
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    
+    // Setup audio context for silence detection
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    const source = audioContext.createMediaStreamAudioSource(mediaStream);
+    source.connect(analyser);
+    // Connect to destination so audio context processes the stream
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
+    
+    // Create MediaRecorder
+    mediaRecorder = new MediaRecorder(mediaStream);
+    recordedChunks = [];
+
+    mediaRecorder.ondataavailable = (event) => {
+      recordedChunks.push(event.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      // Stop silence detection
+      if (silenceCheckInterval) clearInterval(silenceCheckInterval);
+      
+      const audioBlob = new Blob(recordedChunks, { type: "audio/webm" });
+      recordedChunks = [];
+      
+      if (audioBlob.size > 100) { // Only send if audio is not empty
+        addLog(`Recorded ${(audioBlob.size / 1024).toFixed(1)} KB of audio. Sending to Speechmatics.`);
+        updateChatStatus("Sending audio to Speechmatics");
+        sendEvent("audio.upload", { audioBlob, mimeType: "audio/webm" });
+      }
+      
+      // Stop the audio stream
+      mediaStream.getTracks().forEach(track => track.stop());
+      mediaStream = null;
+    };
+
+    addLog("Audio recording ready");
+  } catch (error) {
+    console.error("Failed to setup audio recording:", error);
+    mediaRecorder = null;
+    
+    let errorMessage = "Error: Could not access microphone";
+    if (error.message && error.message.includes("browser does not support")) {
+      errorMessage = error.message;
+    } else if (error.name === "NotAllowedError") {
+      errorMessage = "Microphone permission denied. Please allow microphone access to use voice recording.";
+    } else if (error.name === "NotFoundError") {
+      errorMessage = "No microphone device found";
+    } else if (error.name === "NotReadableError") {
+      errorMessage = "Microphone is already in use";
+    }
+    
+    addLog(errorMessage);
+    if (voiceStatus) voiceStatus.textContent = errorMessage;
+    if (voiceStatusBottom) voiceStatusBottom.textContent = errorMessage;
+    // Don't disable the button - let user retry after allowing permissions
+    // if (voiceStartButton) voiceStartButton.disabled = true;
+  }
+};
+
+const startVoiceListening = async () => {
+  if (!mediaRecorder) {
+    addLog("Requesting microphone access...");
+    await setupAudioRecording();
+  }
+  
+  if (!mediaRecorder) {
+    addLog("Cannot start recording - microphone not available");
+    return;
+  }
+  
+  if (mediaRecorder.state === 'recording') {
+    addLog("Already recording");
     return;
   }
 
-  recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.language = languageCodeToSpeechLanguage(userLanguage);
+  isListening = true;
+  recordedChunks = [];
+  lastAudioTime = Date.now();
 
-  recognition.onstart = () => {
-    isListening = true;
-    messageSent = false; // Reset for new listening session
-    if (voiceStartButton) voiceStartButton.classList.add("hidden");
-    if (voiceStopButton) voiceStopButton.classList.remove("hidden");
-    if (voiceIndicator) {
-      voiceIndicator.classList.remove("idle");
-      voiceIndicator.classList.add("listening");
-    }
-    if (voiceStatus) voiceStatus.textContent = "Listening...";
-    if (voiceIndicatorBottom) voiceIndicatorBottom.classList.remove("hidden");
-    if (voiceStatusBottom) voiceStatusBottom.textContent = "Listening...";
-  };
+  if (voiceStartButton) voiceStartButton.classList.add("hidden");
+  if (voiceStopButton) voiceStopButton.classList.remove("hidden");
+  if (voiceIndicator) {
+    voiceIndicator.classList.remove("idle");
+    voiceIndicator.classList.add("listening");
+  }
+  if (voiceStatus) voiceStatus.textContent = "Listening... (speak now)";
+  if (voiceIndicatorBottom) voiceIndicatorBottom.classList.remove("hidden");
+  if (voiceStatusBottom) voiceStatusBottom.textContent = "Listening...";
+  if (interimTranscript) interimTranscript.textContent = "";
+  if (finalTranscript) finalTranscript.textContent = "Recording...";
 
-  recognition.onresult = (event) => {
-    let interim = "";
-    let hasFinalResult = false;
-    
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript;
-      if (event.results[i].isFinal) {
-        currentTranscript += transcript + " ";
-        allFinalTranscripts.push(transcript);
-        hasFinalResult = true;
-      } else {
-        interim += transcript;
-      }
-    }
-
-    if (interimTranscript) interimTranscript.textContent = interim;
-    if (finalTranscript) finalTranscript.textContent = currentTranscript;
-    
-    // Reset silence timer whenever we get a final result
-    if (hasFinalResult) {
-      clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => {
-        // 2 seconds of silence detected - stop listening and send message
-        if (recognition && isListening) {
-          recognition.stop();
-        }
-      }, silenceTimeout);
-    }
-  };
-
-  recognition.onerror = (event) => {
-    console.error("Speech recognition error:", event.error);
-    if (voiceStatus) voiceStatus.textContent = `Error: ${event.error}`;
-    if (voiceStatusBottom) voiceStatusBottom.textContent = `Error: ${event.error}`;
-    clearTimeout(silenceTimer);
-  };
-
-  recognition.onend = () => {
-    clearTimeout(silenceTimer);
+  try {
+    mediaRecorder.start();
+    addLog("Recording started - speak now!");
+  } catch (error) {
+    addLog(`Error starting recording: ${error.message}`);
     isListening = false;
     if (voiceStartButton) voiceStartButton.classList.remove("hidden");
     if (voiceStopButton) voiceStopButton.classList.add("hidden");
-    if (voiceIndicator) {
-      voiceIndicator.classList.add("idle");
-      voiceIndicator.classList.remove("listening");
-    }
-    if (voiceStatus) voiceStatus.textContent = "Ready to listen";
-    if (voiceIndicatorBottom) voiceIndicatorBottom.classList.add("hidden");
+    return;
+  }
+
+  // Detect silence using audio levels
+  silenceCheckInterval = setInterval(() => {
+    if (!isListening || !analyser) return;
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(dataArray);
     
-    // Auto-send transcribed message after recognition ends (only if not already sent)
-    if (!messageSent && currentTranscript.trim()) {
-      sendTranscribedMessage(currentTranscript.trim());
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+      sum += dataArray[i];
     }
-  };
+    const average = sum / dataArray.length;
+
+    // If audio level is significant, update lastAudioTime
+    if (average > 30) { // Threshold for detecting audio
+      lastAudioTime = Date.now();
+    }
+
+    // Check if 2 seconds of silence
+    if (Date.now() - lastAudioTime > silenceTimeout) {
+      stopVoiceListening();
+    }
+  }, 100);
 };
 
+const stopVoiceListening = () => {
+  if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+
+  isListening = false;
+  if (silenceCheckInterval) clearInterval(silenceCheckInterval);
+
+  if (voiceStartButton) voiceStartButton.classList.remove("hidden");
+  if (voiceStopButton) voiceStopButton.classList.add("hidden");
+  if (voiceIndicator) {
+    voiceIndicator.classList.add("idle");
+    voiceIndicator.classList.remove("listening");
+  }
+  if (voiceStatus) voiceStatus.textContent = "Processing...";
+  if (voiceIndicatorBottom) voiceIndicatorBottom.classList.add("hidden");
+  if (finalTranscript) finalTranscript.textContent = "Processing audio...";
+
+  mediaRecorder.stop();
+};
+
+// Text-to-Speech for responses
 const languageCodeToSpeechLanguage = (lang) => {
   const map = {
     en: "en-US",
@@ -305,52 +382,6 @@ const languageCodeToSpeechLanguage = (lang) => {
   return map[lang] || "en-US";
 };
 
-const startVoiceListening = () => {
-  if (!recognition) setupVoiceRecognition();
-  if (!recognition) return;
-
-  currentTranscript = "";
-  allFinalTranscripts = [];
-  if (interimTranscript) interimTranscript.textContent = "";
-  if (finalTranscript) finalTranscript.textContent = "";
-
-  recognition.start();
-};
-
-const stopVoiceListening = () => {
-  if (recognition && isListening) {
-    recognition.stop();
-    // Let recognition.onend handle sending the message
-  }
-};
-
-const sendTranscribedMessage = (text) => {
-  if (!text.trim()) return;
-  
-  // Prevent duplicate sends
-  if (messageSent) return;
-  messageSent = true;
-
-  addLog(`Voice input sent: "${text}"`);
-  addMessageToConversation(text, userProfile, null, false);
-  sendEvent("transcript.final", { text });
-  updateChatStatus("Processing...");
-  
-  // Clear transcript after sending
-  currentTranscript = "";
-  allFinalTranscripts = [];
-  if (interimTranscript) interimTranscript.textContent = "";
-  if (finalTranscript) finalTranscript.textContent = "";
-};
-
-const clearVoiceTranscript = () => {
-  currentTranscript = "";
-  allFinalTranscripts = [];
-  if (interimTranscript) interimTranscript.textContent = "";
-  if (finalTranscript) finalTranscript.textContent = "";
-};
-
-// Text-to-Speech for responses
 const speakText = (text, lang = userLanguage) => {
   if (!("speechSynthesis" in window)) {
     console.warn("Speech Synthesis API not supported");
@@ -399,11 +430,6 @@ function setLanguage(lang) {
   
   // Set browser reference language
   document.documentElement.lang = lang;
-  
-  // Update speech recognition language
-  if (recognition) {
-    recognition.language = languageCodeToSpeechLanguage(lang);
-  }
   
   updateUI();
 }
@@ -470,19 +496,16 @@ function stopMediaStream() {
 }
 
 function stopRecording() {
-  if (!recorder || recorder.state === "inactive") {
+  if (!mediaRecorder || mediaRecorder.state === "inactive") {
     return;
   }
 
-  recorder.stop();
+  mediaRecorder.stop();
 }
 
 function resetRecordingUi() {
-  recorder = null;
+  mediaRecorder = null;
   recordedChunks = [];
-  speakButton.classList.remove("is-recording");
-  speakButton.textContent = t("button_record");
-  setConnectedUi(socket?.readyState === WebSocket.OPEN);
 }
 
 async function blobToBase64(blob) {
@@ -1084,9 +1107,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (voiceStopButton) {
     voiceStopButton.addEventListener("click", stopVoiceListening);
   }
-
-  // Initialize voice recognition
-  setupVoiceRecognition();
 });
 
 // Initialization

@@ -303,6 +303,11 @@ export class SessionManager {
     this.poolSessions.delete(poolCode);
     poolSession.isPoolSession = false;
 
+    // Update support agent's status to "busy" when user joins
+    if (poolSession.supportUser) {
+      poolSession.supportUser.status = "busy";
+    }
+
     return { success: true, message: "Joined support pool", sessionId: poolSession.id, session: poolSession };
   }
 

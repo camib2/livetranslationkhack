@@ -22,6 +22,16 @@ export interface TranscriptionResult {
   agentLanguage: string;
 }
 
+export interface TranslateTextInput {
+  text: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+}
+
+export interface TranslateTextResult {
+  translatedText: string;
+}
+
 export class SpeechmaticsSttClient {
   private readonly batchUrl = env.speechmaticsBatchUrl.replace(/\/+$/, "");
 
@@ -43,6 +53,48 @@ export class SpeechmaticsSttClient {
       agentInputText: translatedText ?? transcript,
       expectedUserLanguage: input.expectedUserLanguage,
       agentLanguage: input.agentLanguage
+    };
+  }
+
+  async translateText(input: TranslateTextInput): Promise<TranslateTextResult> {
+    // Use Speechmatics batch API to translate text
+    const textBuffer = Buffer.from(input.text, "utf-8");
+    const formData = new FormData();
+    const config = {
+      type: "translation",
+      translation_config: {
+        source_language: input.sourceLanguage,
+        target_languages: [input.targetLanguage]
+      }
+    };
+
+    formData.append("config", JSON.stringify(config));
+    formData.append("data_file", new Blob([textBuffer], { type: "text/plain" }), "text.txt");
+
+    const response = await fetch(`${this.batchUrl}/jobs`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.speechmaticsApiKey}`
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error(`Speechmatics translation job creation failed: ${response.status} ${await response.text()}`);
+    }
+
+    const body = (await response.json()) as unknown;
+    const jobId = extractJobId(body);
+
+    if (!jobId) {
+      throw new Error("Speechmatics translation job creation response did not include a job id");
+    }
+
+    await this.waitForJob(jobId);
+    const translatedText = await this.getTranslatedTranscript(jobId, input.targetLanguage);
+
+    return {
+      translatedText
     };
   }
 

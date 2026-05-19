@@ -10,6 +10,7 @@ import { registerDemoRoutes } from "../routes/demo.js";
 import { registerHealthRoute } from "../routes/health.js";
 import { SessionStore } from "../sessions/session-store.js";
 import { sessionManager } from "../sessions/multi-user-session-manager.js";
+import { translateText } from "../providers/translation/google-translator.js";
 import type { ClientEventMap, ServerEventMap } from "../types/session.js";
 
 export async function createServer() {
@@ -57,13 +58,37 @@ export async function createServer() {
       }, "processFinalTranscript called");
       
       if (multiUserSession && multiUserSession.users.size > 1) {
+        const senderUser = multiUserSession.users.get(currentUserId!);
         const otherUsers = sessionManager.getOtherUsersInSession(currentUserId!);
+        
         for (const otherUser of otherUsers) {
+          let displayText = text;
+          
+          // Get sender and receiver languages
+          const senderLanguage = userProfile === "support" ? senderUser?.agentLanguage : senderUser?.expectedUserLanguage;
+          const receiverLanguage = otherUser.profile === "support" ? otherUser.agentLanguage : otherUser.expectedUserLanguage;
+          
+          // Translate if languages differ
+          if (senderLanguage && receiverLanguage && senderLanguage !== receiverLanguage) {
+            try {
+              const translation = await translateText({
+                text: text,
+                sourceLanguage: senderLanguage,
+                targetLanguage: receiverLanguage
+              });
+              displayText = translation.translatedText;
+              app.log.info({ senderLanguage, receiverLanguage, original: text, translated: displayText }, "Message translated for relay");
+            } catch (error) {
+              app.log.warn({ error, senderLanguage, receiverLanguage }, "Translation failed, using original text");
+              // If translation fails, use original text
+            }
+          }
+          
           otherUser.socket.send(
             JSON.stringify({
               type: "agent.response",
               payload: {
-                text: text,
+                text: displayText,
                 fromProfile: userProfile,
                 isUserMessage: true
               }
@@ -286,14 +311,14 @@ export async function createServer() {
                   }
                 }
 
-                // Notify support agent that user has joined
+                // Notify support agent that user has joined and status changed to busy
                 if (multiUserSession && multiUserSession.supportUser) {
                   multiUserSession.supportUser.socket.send(
                     JSON.stringify({
                       type: "session.status",
                       payload: {
                         state: "listening",
-                        message: "An end user has joined your support session"
+                        message: "An end user has joined your support session. Your status is now Busy."
                       }
                     } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
                   );
