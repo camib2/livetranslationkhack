@@ -2,6 +2,50 @@
 
 **MidContext** is a production-ready real-time multilingual support chat system with automatic language translation, voice support, and intelligent auto-matching of end users to IT support agents.
 
+✅ **Works on Windows, macOS, and Linux**
+
+## 🖥️ System Requirements
+
+### Windows PC
+- **OS:** Windows 10 or newer (Home, Pro, Enterprise)
+- **Processor:** Intel/AMD 2+ cores @ 2GHz minimum
+- **RAM:** 4GB minimum (8GB recommended)
+- **Storage:** 500MB free space
+- **Browser:** Chrome, Edge, Firefox (any modern browser)
+- **Microphone:** Working microphone for voice recording
+- **Internet:** Stable connection (broadband recommended)
+
+### What You Need to Install
+
+#### 1. **Node.js** (Required)
+- Download from [nodejs.org](https://nodejs.org/)
+- Choose **LTS** version (Long Term Support)
+- Windows installer will add Node.js to PATH automatically
+- **Verify:** Open PowerShell and run:
+  ```powershell
+  node --version  # Should show v20.x.x or higher
+  npm --version   # Should show 10.x.x or higher
+  ```
+
+#### 2. **Modern Web Browser** (Already installed)
+- Chrome, Edge, or Firefox
+- Must support:
+  - WebSockets
+  - Web Audio API
+  - getUserMedia (microphone access)
+- ✅ All Windows 10+ browsers support these
+
+#### 3. **Working Microphone** (Hardware)
+- Built-in laptop microphone, OR
+- USB microphone, OR
+- Headset with microphone
+- **Test:** Right-click speaker icon → Sound settings → Input devices
+
+#### 4. **Speechmatics API Key** (Free trial available)
+- Sign up at [speechmatics.com](https://www.speechmatics.com)
+- Get free API key for development
+- Add to `.env` file (instructions below)
+
 ## Key Features
 
 ✨ **Auto-Matching** - End users automatically connect to first available IT support agent
@@ -11,40 +55,101 @@
 🎯 **Multi-Language** - English, Italian, Finnish with browser TTS
 ⚡ **Real-Time** - WebSocket-based instant messaging
 
-## 🚀 Quick Start
+## 🚀 Quick Start on Windows
 
-### Windows
+### Easiest Way - Automated Setup
 ```powershell
+# 1. Open PowerShell in your project folder
+# 2. Run this command:
 .\setup.ps1
+
+# The script automatically:
+# ✅ Checks if Node.js is installed
+# ✅ Installs all dependencies
+# ✅ Builds the TypeScript code
+# ✅ Creates .env configuration
+# ✅ Starts the development server
+# ✅ Opens your browser to http://localhost:3000
 ```
 
-### macOS / Linux
+**That's it!** Your app is running. Open 2 browser windows to test it.
+
+### Manual Setup (Alternative)
+
+```powershell
+# 1. Install dependencies
+npm install
+
+# 2. Build TypeScript
+npm run build
+
+# 3. Start server
+npm run dev
+
+# 4. Open browser
+Start http://localhost:3000
+```
+
+### On macOS / Linux
 ```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-### Manual Setup
+## 📖 First Time Setup on Windows
 
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
+### Step 1: Download the Project
+```powershell
+# Clone from GitHub (if you haven't already)
+git clone https://github.com/your-username/livetranslationkhack
+cd livetranslationkhack
+```
 
-2. **Build TypeScript**
-   ```bash
-   npm run build
-   ```
+### Step 2: Install Node.js (if not installed)
+```powershell
+# Check if Node.js is installed
+node --version
 
-3. **Start development server**
-   ```bash
-   npm run dev
-   ```
+# If not installed:
+# 1. Download from https://nodejs.org/
+# 2. Run installer (node-v20.x.x-x64.msi)
+# 3. Follow prompts - use default settings
+# 4. Restart PowerShell
+```
 
-4. **Open two browser windows** (for testing auto-matching):
-   - http://localhost:3000 → Select "IT Support"
-   - http://localhost:3000 → Select "End User"
-   - They auto-connect! 🎯
+### Step 3: Allow Microphone Access
+1. Open **Settings** → **Privacy & Security** → **Microphone**
+2. Ensure your microphone is enabled
+3. Windows apps should show "Allowed"
+
+### Step 4: Run Setup Script
+```powershell
+# Navigate to project folder
+cd path\to\LiveTranslationHack
+
+# Run setup
+.\setup.ps1
+
+# If you get permission error:
+# 1. Right-click PowerShell → Run as Administrator
+# 2. Run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+# 3. Then run .\setup.ps1 again
+```
+
+### Step 5: Test with 2 Browsers
+```
+Browser 1: http://localhost:3000
+  → Select "IT Support"
+  → Enter your name
+  → Click "Start Session"
+
+Browser 2: http://localhost:3000
+  → Select "End User"
+  → Enter your name
+  → Click "Start Session"
+
+Result: They auto-connect! 🎯
+```
 
 ## 📖 How to Use
 
@@ -247,13 +352,46 @@ SPEECHMATICS_TTS_URL=https://tts.api.speechmatics.com/v2
 
 ## ❓ Troubleshooting
 
+### Windows-Specific Issues
+
 | Issue | Solution |
 |-------|----------|
-| Microphone not working | Click "Allow" on permission prompt |
-| Port 3000 in use | `taskkill /IM node.exe /F` then restart |
-| Can't hear voice | Check browser volume & speaker settings |
-| Connection timeout | Ensure `.env` has valid API keys |
-| Messages not translating | Check internet connection & API keys |
+| **"PowerShell cannot execute script"** | Right-click PowerShell → "Run as Administrator"<br/>`Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`<br/>Then run `.\setup.ps1` again |
+| **Node.js not found** | Download from [nodejs.org](https://nodejs.org/)<br/>Run MSI installer (v20 LTS)<br/>Restart PowerShell after install |
+| **"npm command not found"** | Node.js not in PATH<br/>Restart your computer after installing Node.js |
+| **Port 3000 already in use** | `taskkill /IM node.exe /F`<br/>Then restart: `npm run dev` |
+| **Microphone not working** | 1. Check Settings → Privacy & Security → Microphone<br/>2. Click browser notification "Allow microphone"<br/>3. Check Windows Sound settings for device |
+| **Can't hear voice playback** | Check Volume mixer (right-click speaker icon)<br/>Ensure app volume is not muted<br/>Test speaker with YouTube |
+| **Connection timeout** | Ensure `.env` file exists with SPEECHMATICS_API_KEY<br/>Check internet connection<br/>Verify firewall isn't blocking localhost:3000 |
+| **"Cannot find module"** | Run `npm install` first<br/>Delete `node_modules` folder and run `npm install` again |
+| **Browser won't load page** | Clear browser cache (Ctrl+Shift+Del)<br/>Try different browser (Chrome, Edge, Firefox)<br/>Check browser console (F12) for errors |
+
+### General Issues
+
+| Issue | Solution |
+|-------|----------|
+| Messages not translating | Check `.env` has valid SPEECHMATICS_API_KEY |
+| No transcription appearing | Open browser console (F12) and check for errors |
+| Two users can't see each other | Open `http://localhost:3000` in 2 separate browser windows<br/>Select different roles (Support vs End User) |
+| Build fails | Delete `dist/` folder: `rmdir dist /s /q`<br/>Delete `node_modules` and run `npm install` |
+
+### Quick Fixes
+
+```powershell
+# Fix Node.js not in PATH
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+node --version
+
+# Clear everything and reinstall
+Remove-Item node_modules -Recurse -Force
+Remove-Item dist -Recurse -Force
+npm install
+npm run build
+npm run dev
+
+# Kill stuck node process
+Get-Process node | Stop-Process -Force
+```
 
 ## 📄 License
 
