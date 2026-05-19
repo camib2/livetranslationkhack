@@ -1,70 +1,85 @@
-# MidContext Hackathon Setup Script
-# This script downloads and sets up MidContext on a fresh machine
+@echo off
+REM MidContext - Real-Time Multilingual Support Chat
+REM Complete Setup Script
 
-$ErrorActionPreference = "Stop"
+echo.
+echo ==================================
+echo MidContext Setup and Launch
+echo ==================================
+echo.
 
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host "MidContext Hackathon Setup" -ForegroundColor Cyan
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host ""
+REM Check Node.js
+echo Checking Node.js...
+node --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Node.js not found. Please install from https://nodejs.org/
+    exit /b 1
+)
+echo Node.js found
 
-# Check if Node.js is installed
-Write-Host "Checking Node.js installation..." -ForegroundColor Yellow
-try {
-    $nodeVersion = node --version
-    Write-Host "✓ Node.js $nodeVersion found" -ForegroundColor Green
-} catch {
-    Write-Host "✗ Node.js not found!" -ForegroundColor Red
-    Write-Host "Please install Node.js from https://nodejs.org/" -ForegroundColor Yellow
-    exit 1
-}
+REM Check npm
+echo Checking npm...
+npm --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo npm not found
+    exit /b 1
+)
+echo npm found
 
-# Get the directory where the script is running
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$projectDir = $scriptDir
+REM Navigate to project
+echo.
+echo Setting up project...
+cd /d "%~dp0"
 
-Write-Host ""
-Write-Host "Project directory: $projectDir" -ForegroundColor Cyan
-Write-Host ""
+REM Install dependencies
+echo Installing dependencies...
+call npm install
+if %errorlevel% neq 0 (
+    echo npm install failed
+    exit /b 1
+)
+echo Dependencies installed
 
-# Check if project already exists
-if (Test-Path "$projectDir\package.json") {
-    Write-Host "Project already exists. Updating dependencies..." -ForegroundColor Yellow
-    cd $projectDir
-} else {
-    Write-Host "Cloning MidContext repository..." -ForegroundColor Yellow
-    # If we need to clone, this would be done first
-    cd $projectDir
-}
+REM Build TypeScript
+echo.
+echo Building TypeScript...
+call npm run build
+if %errorlevel% neq 0 (
+    echo Build failed
+    exit /b 1
+)
+echo Build complete
 
-# Install dependencies
-Write-Host "Installing dependencies..." -ForegroundColor Yellow
-npm install
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "✗ npm install failed" -ForegroundColor Red
-    exit 1
-}
-Write-Host "✓ Dependencies installed" -ForegroundColor Green
+REM Check .env
+if not exist ".env" (
+    echo Creating .env file...
+    (
+        echo PORT=3000
+        echo HOST=0.0.0.0
+        echo LOG_LEVEL=info
+        echo.
+        echo # Speechmatics Configuration
+        echo SPEECHMATICS_API_KEY=RqaSOPvfLqsFLE39P395PU9xOJPEZNDf
+        echo SPEECHMATICS_BATCH_URL=https://asr.api.speechmatics.com/v2
+        echo SPEECHMATICS_RT_URL=wss://rt.speechmatics.com/v2
+        echo SPEECHMATICS_TTS_URL=https://tts.api.speechmatics.com/v2
+    ) > .env
+    echo .env created
+)
 
-Write-Host ""
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host "Setup Complete!" -ForegroundColor Cyan
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Starting MidContext server..." -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Server will be available at: http://localhost:3000" -ForegroundColor Green
-Write-Host ""
-Write-Host "Testing with 2 browsers:" -ForegroundColor Yellow
-Write-Host "1. Open http://localhost:3000 in Browser 1" -ForegroundColor White
-Write-Host "2. Open http://localhost:3000 in Browser 2" -ForegroundColor White
-Write-Host "3. Browser 1: Select 'IT Support' → Enter Name → Click 'Start Session'" -ForegroundColor White
-Write-Host "4. Browser 2: Select 'End User' → Enter Name → Click 'Start Session'" -ForegroundColor White
-Write-Host ""
-Write-Host "They should connect automatically!" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
-Write-Host ""
+echo.
+echo ==================================
+echo Setup Complete!
+echo ==================================
+echo.
+echo Starting MidContext...
+echo Server: http://localhost:3000
+echo.
+echo Press Ctrl+C to stop
+echo.
 
-# Start the dev server
-npm run dev
+REM Open browser
+start http://localhost:3000
+
+REM Start dev server
+call npm run dev

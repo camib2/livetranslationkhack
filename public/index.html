@@ -40,36 +40,6 @@
           </select>
         </div>
 
-        <div class="modal-section">
-          <label class="modal-label" data-i18n="session_type">Session Mode</label>
-          <div class="radio-group" id="sessionModeGroup">
-            <!-- End User modes (shown by default) -->
-            <div id="endUserModes" class="hidden">
-              <label class="radio-label">
-                <input type="radio" name="sessionMode" value="create" checked />
-                <span data-i18n="session_create">Join Support Session</span>
-              </label>
-            </div>
-            
-            <!-- Support modes (shown when Support is selected) -->
-            <div id="supportModes" class="hidden">
-              <label class="radio-label">
-                <input type="radio" name="sessionMode" value="pool" checked />
-                <span data-i18n="session_pool_wait">Wait for Support Request</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="sessionMode" value="create" />
-                <span data-i18n="session_create_direct">Create Direct Session</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div id="joinSessionSection" class="modal-section hidden">
-          <label class="modal-label" data-i18n="session_code_label">Enter Session Code</label>
-          <input type="text" id="sessionCodeInput" placeholder="e.g., ABC123" maxlength="6" style="text-transform: uppercase;" />
-        </div>
-
         <button id="profileSubmitButton" type="button" data-i18n="button_start">Start Session</button>
       </div>
     </div>
@@ -106,38 +76,43 @@
 
       <!-- Voice Transcription Panel -->
       <div class="voice-panel">
-        <div class="voice-indicator" id="voiceIndicator">
-          <div class="voice-waves">
-            <div class="wave"></div>
-            <div class="wave"></div>
-            <div class="wave"></div>
-            <div class="wave"></div>
-            <div class="wave"></div>
-          </div>
-          <span class="voice-status" id="voiceStatus">Ready to listen</span>
-        </div>
-        
         <div class="transcription-area">
           <label class="transcription-label">Real-time Transcription</label>
           <div class="transcription-display" id="transcriptionDisplay">
             <p id="interimTranscript" class="interim-text"></p>
             <p id="finalTranscript" class="final-text"></p>
+            <p id="transcriptionPlaceholder" class="transcription-placeholder" style="color: #999; font-style: italic;">
+              Transcription will appear here when you speak...
+            </p>
           </div>
         </div>
         
         <div class="voice-controls">
-          <button id="voiceStartButton" class="voice-btn primary" title="Start listening">
-            <svg class="btn-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M10 2C8.9 2 8 2.9 8 4V10C8 11.1 8.9 12 10 12C11.1 12 12 11.1 12 10V4C12 2.9 11.1 2 10 2ZM14.3 9C14.3 11.3 12.7 13.2 10.5 13.7V17H9.5V13.7C7.3 13.2 5.7 11.3 5.7 9H7C7 10.7 8.4 12 10 12C11.6 12 13 10.7 13 9H14.3Z" fill="currentColor"/>
-            </svg>
-            <span class="btn-label">Start Listening</span>
-          </button>
-          <button id="voiceStopButton" class="voice-btn danger hidden" title="Stop listening">
-            <svg class="btn-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M8 5H12V15H8V5Z" fill="currentColor"/>
-            </svg>
-            <span class="btn-label">Stop</span>
-          </button>
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <button id="voiceStartButton" class="voice-btn primary" title="Start listening">
+              <svg class="btn-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M10 2C8.9 2 8 2.9 8 4V10C8 11.1 8.9 12 10 12C11.1 12 12 11.1 12 10V4C12 2.9 11.1 2 10 2ZM14.3 9C14.3 11.3 12.7 13.2 10.5 13.7V17H9.5V13.7C7.3 13.2 5.7 11.3 5.7 9H7C7 10.7 8.4 12 10 12C11.6 12 13 10.7 13 9H14.3Z" fill="currentColor"/>
+              </svg>
+              <span class="recording-dot-btn" style="display:none;"></span>
+              <span class="btn-label">Start Listening</span>
+            </button>
+            <div class="voice-indicator" id="voiceIndicator">
+              <div class="voice-waves">
+                <div class="wave"></div>
+                <div class="wave"></div>
+                <div class="wave"></div>
+                <div class="wave"></div>
+                <div class="wave"></div>
+              </div>
+              <span class="voice-status" id="voiceStatus">Ready to listen</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Processing Status -->
+        <div id="processingStatus" class="processing-status hidden">
+          <span class="status-spinner"></span>
+          <span id="statusText">Processing audio...</span>
         </div>
       </div>
 

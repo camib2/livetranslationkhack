@@ -236,6 +236,8 @@ export class SessionManager {
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const poolCode = this.generateSessionCode();
 
+    console.log(`[POOL CREATE] Creating pool session: code=${poolCode}, sessionId=${sessionId}`);
+
     const session: MultiUserSession = {
       id: sessionId,
       code: poolCode,
@@ -264,6 +266,8 @@ export class SessionManager {
     this.sessionsByCode.set(poolCode, session);
     this.userSessions.set(userId, session);
     this.poolSessions.set(poolCode, session);
+
+    console.log(`[POOL CREATE] ✅ Added to poolSessions. Total pools: ${this.poolSessions.size}, code=${poolCode}`);
 
     return { sessionId, poolCode, supportUserId: userId };
   }
@@ -330,15 +334,19 @@ export class SessionManager {
    */
   getAvailableSupportAgents(): MultiUserSession[] {
     const available: MultiUserSession[] = [];
-    for (const session of this.poolSessions.values()) {
+    console.log(`[POOL DEBUG] poolSessions count: ${this.poolSessions.size}`);
+    for (const [code, session] of this.poolSessions.entries()) {
+      console.log(`[POOL DEBUG] Checking pool session: code=${code}, hasSupport=${!!session.supportUser}, status=${session.supportUser?.status}`);
       if (session.supportUser) {
         // Treat undefined status as "free" by default
         const status = session.supportUser.status || "free";
+        console.log(`[POOL DEBUG] Status check: "${status}" === "free" ? ${status === "free"}`);
         if (status === "free") {
           available.push(session);
         }
       }
     }
+    console.log(`[POOL DEBUG] Found ${available.length} available agents`);
     return available;
   }
 
@@ -353,6 +361,7 @@ export class SessionManager {
     socket: WebSocket,
     userName?: string
   ): { success: boolean; message: string; sessionId?: string; session?: MultiUserSession; supportAgent?: SessionUser } {
+    console.log(`[ASSIGN] Looking for available agents. poolSessions.size=${this.poolSessions.size}`);
     const availableAgents = this.getAvailableSupportAgents();
     
     if (availableAgents.length === 0) {

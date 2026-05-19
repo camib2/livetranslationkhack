@@ -11,34 +11,36 @@
 🎯 **Multi-Language** - English, Italian, Finnish with browser TTS
 ⚡ **Real-Time** - WebSocket-based instant messaging
 
-## Quick Start (Hackathon)
+## 🚀 Quick Start
 
 ### Windows
 ```powershell
-.\setup.bat
-# or
 .\setup.ps1
 ```
+This automatically:
+- ✅ Checks/installs Node.js
+- ✅ Installs all dependencies
+- ✅ Builds TypeScript
+- ✅ Validates environment
+- ✅ Launches dev server
+- ✅ Opens browser
 
 ### macOS / Linux
 ```bash
+chmod +x setup.sh
 ./setup.sh
 ```
 
-**Server runs at:** http://localhost:3000
-
-See [HACKATHON.md](HACKATHON.md) for complete demo guide.
-
-## Manual Setup
+### Manual Setup
 
 1. **Install dependencies**
    ```bash
    npm install
    ```
 
-2. **Configure environment** (copy `.env.example` to `.env`)
+2. **Build TypeScript**
    ```bash
-   cp .env.example .env
+   npm run build
    ```
 
 3. **Start development server**
@@ -49,6 +51,78 @@ See [HACKATHON.md](HACKATHON.md) for complete demo guide.
 4. **Open in browser**
    - http://localhost:3000 (IT Support)
    - http://localhost:3000 (End User) - auto-matches!
+
+**Server runs at:** http://localhost:3000
+
+See [HACKATHON.md](HACKATHON.md) for complete demo guide.
+
+## 🌐 Deploy Online
+
+### Option 1: Railway (Recommended - Easiest)
+1. Push to GitHub: `git push origin main`
+2. Go to [railway.app](https://railway.app) → Sign in with GitHub
+3. Click "New Project" → Select this repo
+4. Railway auto-detects Node.js and deploys
+5. Your app runs at: `https://your-project.railway.app`
+
+**Cost:** Free tier available, $5/month for production
+
+### Option 2: Vercel
+1. Push to GitHub
+2. Go to [vercel.com](https://vercel.com) → Import Project
+3. Select this repo
+4. Configure environment variables in Settings
+5. Deploy automatically or manually
+
+**Cost:** Free for hobby projects
+
+### Option 3: Heroku (Free Alternative)
+```bash
+npm install -g heroku
+heroku login
+heroku create your-app-name
+git push heroku main
+heroku open
+```
+
+### Option 4: Docker + Any Host
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --production
+COPY . .
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+Build and deploy:
+```bash
+docker build -t midcontext .
+docker run -p 3000:3000 midcontext
+```
+
+## Environment Variables
+
+Create `.env` file in root:
+```env
+PORT=3000
+HOST=0.0.0.0
+LOG_LEVEL=info
+
+# Speechmatics Configuration
+SPEECHMATICS_API_KEY=your_key_here
+SPEECHMATICS_BATCH_URL=https://asr.api.speechmatics.com/v2
+SPEECHMATICS_RT_URL=wss://rt.speechmatics.com/v2
+SPEECHMATICS_TTS_URL=https://tts.api.speechmatics.com/v2
+
+# Vertex AI Configuration (optional)
+VERTEX_PROJECT_ID=your-project-id
+VERTEX_LOCATION=us-central1
+VERTEX_AGENT_ID=your-agent-id
+VERTEX_LANGUAGE_CODE=en-US
+```
 
 ## Architecture
 

@@ -1,12 +1,14 @@
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
+import fastifyStatic from "@fastify/static";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 import { env } from "../config/env.js";
 import { TurnOrchestrator } from "../orchestrator/turn-orchestrator.js";
 import { SpeechmaticsSttClient } from "../providers/speechmatics/stt-client.js";
 import { SpeechmaticsTtsClient } from "../providers/speechmatics/tts-client.js";
 import { VertexAgentClient } from "../providers/vertex/agent-client.js";
-import { registerDemoRoutes } from "../routes/demo.js";
 import { registerHealthRoute } from "../routes/health.js";
 import { SessionStore } from "../sessions/session-store.js";
 import { sessionManager } from "../sessions/multi-user-session-manager.js";
@@ -27,7 +29,16 @@ export async function createServer() {
   const orchestrator = new TurnOrchestrator(app.log, sessionStore, agentClient, ttsClient);
 
   await app.register(websocket);
-  await registerDemoRoutes(app);
+  
+  // Serve static files
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const publicDir = join(__dirname, "../../public");
+  await app.register(fastifyStatic, {
+    root: publicDir,
+    prefix: "/"
+  });
+  
   await registerHealthRoute(app);
 
   app.get("/ws/voice", { websocket: true }, (socket) => {
@@ -164,6 +175,7 @@ export async function createServer() {
             // Create or join session
             if (sessionMode === "pool" && profile === "support") {
               // Support agent creates a pool session to wait for users
+              app.log.info({ sessionMode, profile }, "[POOL] Creating pool session for support agent");
               const poolResult = sessionManager.createPoolSession(
                 profile,
                 expectedUserLanguage,
@@ -187,6 +199,7 @@ export async function createServer() {
               }
             } else if (profile === "enduser" && (sessionMode === "create" || !payload.joinCode)) {
               // End user auto-matching with available support agent
+              app.log.info({}, "End user requesting auto-match");
               const assignResult = sessionManager.assignUserToAvailableAgent(
                 profile,
                 expectedUserLanguage,
@@ -203,14 +216,17 @@ export async function createServer() {
                 multiUserSession = assignResult.session!;
                 sessionCode = multiUserSession.code; // Set session code for the response
 
-                // Notify support agent that user has joined
+                // Update support agent status to busy
                 if (multiUserSession.supportUser) {
+                  multiUserSession.supportUser.status = "busy";
+                  
+                  // Notify support agent that user has joined
                   multiUserSession.supportUser.socket.send(
                     JSON.stringify({
                       type: "session.status",
                       payload: {
                         state: "listening",
-                        message: `End user "${payload.userName || "User"}" joined your session`
+                        message: `End user "${payload.userName || "User"}" joined your session. Your status is now Busy.`
                       }
                     } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
                   );
