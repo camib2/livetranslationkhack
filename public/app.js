@@ -635,7 +635,8 @@ function speakReply(text) {
   window.speechSynthesis.speak(utterance);
 }
 
-connectButton.addEventListener("click", () => {
+// Function to establish WebSocket connection
+const connectToWebSocket = () => {
   socket = new WebSocket(createSocketUrl());
   setStatus("Connecting");
 
@@ -764,7 +765,12 @@ connectButton.addEventListener("click", () => {
     addLog("WebSocket transport error.");
     setStatus("Connection error");
   });
-});
+};
+
+// Add click listener to connectButton if it exists (for backwards compatibility)
+if (connectButton) {
+  connectButton.addEventListener("click", connectToWebSocket);
+}
 
 disconnectButton.addEventListener("click", () => {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
@@ -1064,10 +1070,9 @@ profileSubmitButton.addEventListener("click", () => {
   userName = nameValue;
   sessionMode = selectedMode?.value || "create";
   
-  // Get support status if support agent
+  // Status is auto-managed by the app (defaults to "free" for support)
   if (userProfile === "support") {
-    const statusRadio = document.querySelector('input[name="supportStatus"]:checked');
-    userStatus = statusRadio?.value || "free";
+    userStatus = "free";
   }
   
   if (sessionMode === "join") {
@@ -1101,9 +1106,7 @@ profileSubmitButton.addEventListener("click", () => {
   showWaitingView(userProfile === "support");
   
   // Automatically start the WebSocket connection
-  setTimeout(() => {
-    connectButton.click();
-  }, 100);
+  connectToWebSocket();
 });
 
 // Session mode radio button listeners
