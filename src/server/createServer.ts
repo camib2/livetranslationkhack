@@ -48,6 +48,14 @@ export async function createServer() {
 
       // Relay user's message to other user in multi-user session
       const multiUserSession = sessionManager.getSessionForUser(currentUserId!);
+      app.log.info({ 
+        currentUserId, 
+        sessionExists: !!multiUserSession, 
+        sessionUserCount: multiUserSession?.users.size,
+        userProfile,
+        text: text.substring(0, 50)
+      }, "processFinalTranscript called");
+      
       if (multiUserSession && multiUserSession.users.size > 1) {
         const otherUsers = sessionManager.getOtherUsersInSession(currentUserId!);
         for (const otherUser of otherUsers) {
@@ -62,11 +70,18 @@ export async function createServer() {
             })
           );
         }
-      }
-
-      // Only get agent response if this is not a multi-user session
-      // (in multi-user sessions, support agents talk to each other, not to bot)
-      if (!multiUserSession || multiUserSession.users.size <= 1) {
+        // Multi-user session - just confirm message received
+        socket.send(
+          JSON.stringify({
+            type: "session.status",
+            payload: {
+              state: "listening",
+              message: "Message sent"
+            }
+          } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
+        );
+      } else {
+        // Single-user session or no session - get agent response from orchestrator
         const result = await orchestrator.handleFinalTranscript(sessionId, text);
 
         socket.send(
@@ -95,34 +110,6 @@ export async function createServer() {
             payload: {
               state: "listening",
               message: "Ready for the next turn"
-            }
-          } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
-        );
-
-        // Relay agent response to other user in multi-user session
-        if (multiUserSession && multiUserSession.users.size > 1) {
-          const otherUsers = sessionManager.getOtherUsersInSession(currentUserId!);
-          for (const otherUser of otherUsers) {
-            otherUser.socket.send(
-              JSON.stringify({
-                type: "agent.response",
-                payload: {
-                  text: result.responseText,
-                  fromProfile: "support",
-                  isAgentResponse: true
-                }
-              })
-            );
-          }
-        }
-      } else {
-        // Multi-user session - just confirm message received
-        socket.send(
-          JSON.stringify({
-            type: "session.status",
-            payload: {
-              state: "listening",
-              message: "Message sent"
             }
           } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
         );
@@ -161,20 +148,15 @@ export async function createServer() {
               );
 
               currentSessionId = poolResult.sessionId;
+              currentUserId = poolResult.supportUserId;
               sessionCode = poolResult.poolCode;
 
-              // Get the user ID and apply status
-              const poolSession = sessionManager.getSessionForUser(poolResult.sessionId);
+              // Get the session to store for later use
+              const poolSession = sessionManager.getSessionForUser(currentUserId);
               if (poolSession) {
-                for (const [userId, user] of poolSession.users) {
-                  if (user.socket === socket) {
-                    currentUserId = userId;
-                    // Apply the status from payload if support agent
-                    if (payload.status) {
-                      user.status = payload.status;
-                    }
-                    break;
-                  }
+                // Apply the status from payload if support agent
+                if (payload.status && poolSession.supportUser) {
+                  poolSession.supportUser.status = payload.status;
                 }
                 multiUserSession = poolSession;
               }
@@ -194,6 +176,7 @@ export async function createServer() {
                 currentSessionId = assignResult.sessionId!;
                 currentUserId = assignResult.session!.endUser!.id;
                 multiUserSession = assignResult.session!;
+                sessionCode = multiUserSession.code; // Set session code for the response
 
                 // Notify support agent that user has joined
                 if (multiUserSession.supportUser) {

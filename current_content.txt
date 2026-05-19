@@ -1,0 +1,100 @@
+                  currentUserId = endUser.id;
+                }
+                currentSessionId = joinPoolResult.sessionId || "";
+                multiUserSession = joinPoolResult.session;
+              } else {
+                // Try regular session join as fallback
+                const joinResult = sessionManager.joinSessionByCode(
+                  payload.joinCode,
+                  profile,
+                  expectedUserLanguage,
+                  expectedUserLanguage,
+                  agentLanguage,
+                  socket
+                );
+
+                if (!joinResult.success) {
+                  socket.send(
+                    JSON.stringify({
+                      type: "error",
+                      payload: {
+                        message: joinResult.message
+                      }
+                    } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["error"] })
+                  );
+                  return;
+                }
+
+                currentSessionId = joinResult.sessionId!;
+                multiUserSession = joinResult.session!;
+
+                // Get the user ID from the session (it's the newly added user)
+                for (const [userId, user] of multiUserSession.users) {
+                  if (user.socket === socket) {
+                    currentUserId = userId;
+                    break;
+                  }
+                }
+              } else {
+                // Successfully joined pool
+                currentSessionId = joinPoolResult.sessionId!;
+                multiUserSession = joinPoolResult.session!;
+                sessionCode = multiUserSession.code; // Set the pool code for the response
+
+                // Get the user ID
+                for (const [userId, user] of multiUserSession.users) {
+                  if (user.socket === socket) {
+                    currentUserId = userId;
+                    break;
+                  }
+                }
+
+                // Notify support agent that user has joined
+                if (multiUserSession && multiUserSession.supportUser) {
+                  multiUserSession.supportUser.socket.send(
+                    JSON.stringify({
+                      type: "session.status",
+                      payload: {
+                        state: "listening",
+                        message: "An end user has joined your support session"
+                      }
+                    } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["session.status"] })
+                  );
+                }
+              }
+            } else if (sessionMode === "join" && payload.joinCode) {
+              // Join existing session
+              const joinResult = sessionManager.joinSessionByCode(
+                payload.joinCode,
+                profile,
+                expectedUserLanguage,
+                expectedUserLanguage,
+                agentLanguage,
+                socket
+              );
+
+              if (!joinResult.success) {
+                socket.send(
+                  JSON.stringify({
+                    type: "error",
+                    payload: {
+                      message: joinResult.message
+                    }
+                  } satisfies { type: keyof ServerEventMap; payload: ServerEventMap["error"] })
+                );
+                return;
+              }
+
+              currentSessionId = joinResult.sessionId!;
+              multiUserSession = joinResult.session!;
+
+              // Get the user ID from the session (it's the newly added user)
+              for (const [userId, user] of multiUserSession.users) {
+                if (user.socket === socket) {
+                  currentUserId = userId;
+                  break;
+                }
+              }
+            } else {
+              // Create new session or auto-assign end user to available support agent
+              if (profile === "enduser" && sessionMode === "create") {

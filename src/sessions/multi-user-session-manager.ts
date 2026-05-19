@@ -232,7 +232,7 @@ export class SessionManager {
   /**
    * Create a pool session for a support agent to wait for users
    */
-  createPoolSession(profile: "support", language: string, expectedUserLanguage: string, agentLanguage: string, socket: WebSocket): { sessionId: string; poolCode: string } {
+  createPoolSession(profile: "support", language: string, expectedUserLanguage: string, agentLanguage: string, socket: WebSocket): { sessionId: string; poolCode: string; supportUserId: string } {
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const poolCode = this.generateSessionCode();
 
@@ -265,7 +265,7 @@ export class SessionManager {
     this.userSessions.set(userId, session);
     this.poolSessions.set(poolCode, session);
 
-    return { sessionId, poolCode };
+    return { sessionId, poolCode, supportUserId: userId };
   }
 
   /**
