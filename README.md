@@ -2,7 +2,7 @@
 
 **MidContext** is a production-ready real-time multilingual support chat system with automatic language translation, voice support, and intelligent auto-matching of end users to IT support agents.
 
-✅ **Works on Windows, macOS, and Linux**
+✅ **Works on Windows**
 
 ## 🖥️ System Requirements
 
@@ -165,12 +165,6 @@ npm run dev
 
 # 4. Open browser
 Start http://localhost:3000
-```
-
-### On macOS / Linux
-```bash
-chmod +x setup.sh
-./setup.sh
 ```
 
 ## 📖 First Time Setup on Windows
