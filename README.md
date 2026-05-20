@@ -55,7 +55,84 @@
 🎯 **Multi-Language** - English, Italian, Finnish with browser TTS
 ⚡ **Real-Time** - WebSocket-based instant messaging
 
-## 🚀 Quick Start on Windows
+## 📸 Application UI Overview
+
+**Profile Selection Screen** - Users choose their role (IT Support or End User) and select their preferred language
+- Options: English, Italian, Finnish
+- Auto-matching system connects end users with first available support agent
+
+**Chat Interface** - Real-time conversation with:
+- Real-time speech transcription (Speechmatics STT)
+- Message translation (Google Translate)
+- Voice input/output with browser TTS
+- Session status tracking
+- Both text and voice messaging support
+
+## 🏗️ System Architecture
+
+MidContext connects users through an intelligent online server with real-time speech processing and multilingual translation:
+
+```mermaid
+graph TB
+    subgraph Users["👥 Users"]
+        EndUser["📱 End User<br/>Browser Client"]
+        Support["🛠️ Support Agent<br/>Browser Client"]
+    end
+    
+    subgraph Server["☁️ Online Server<br/>MidContext"]
+        WS["WebSocket<br/>Connection Manager"]
+        Orchestrator["🎼 Turn Orchestrator<br/>Session Manager"]
+        Router["🔀 Message Router<br/>Auto-Matching"]
+    end
+    
+    subgraph AI["🤖 AI Solutions"]
+        VertexAI["Google Vertex AI<br/>Intelligent Agent"]
+        Agent["Multi-turn<br/>Conversation"]
+    end
+    
+    subgraph Speech["🎤 Speech Processing<br/>Speechmatics"]
+        STT["Speech-to-Text<br/>Real-time Transcription"]
+        TTS["Text-to-Speech<br/>Voice Output"]
+    end
+    
+    subgraph Translation["🌐 Translation"]
+        Translator["Google Translate<br/>Multi-language Support<br/>EN, IT, FI"]
+    end
+    
+    EndUser -->|WebSocket| WS
+    Support -->|WebSocket| WS
+    WS --> Orchestrator
+    Orchestrator --> Router
+    Router -->|Route Messages| EndUser
+    Router -->|Route Messages| Support
+    
+    Orchestrator -->|Voice Processing| STT
+    STT -->|Transcription| Translator
+    Orchestrator -->|Voice Output| TTS
+    
+    Router -->|Text Messages| Translator
+    Translator -->|Translated| Router
+    
+    Orchestrator -->|AI Requests| VertexAI
+    VertexAI --> Agent
+    Agent -->|Responses| Orchestrator
+    
+    style Users fill:#e1f5ff
+    style Server fill:#f3e5f5
+    style AI fill:#fff3e0
+    style Speech fill:#e8f5e9
+    style Translation fill:#fce4ec
+```
+
+### Architecture Components
+
+- **Users**: End users and support agents connecting through web browsers
+- **Online Server (MidContext)**: Central server managing WebSocket connections, session orchestration, and message routing
+- **AI Solutions**: Google Vertex AI for intelligent multi-turn conversations
+- **Speech Processing**: Speechmatics for real-time speech-to-text transcription and text-to-speech playback
+- **Translation**: Google Translate for automatic multilingual support (English, Italian, Finnish)
+
+## �🚀 Quick Start on Windows
 
 ### Easiest Way - Automated Setup
 ```powershell
