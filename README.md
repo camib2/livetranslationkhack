@@ -57,16 +57,30 @@
 
 ## 📸 Application UI Overview
 
-**Profile Selection Screen** - Users choose their role (IT Support or End User) and select their preferred language
+### Profile Selection Screen
+Users choose their role (IT Support or End User) and select their preferred language:
 - Options: English, Italian, Finnish
 - Auto-matching system connects end users with first available support agent
 
-**Chat Interface** - Real-time conversation with:
+![Profile Selection Modal](./public/screenshots/01-profile-selection.png)
+
+### End User Chat Interface
+Real-time conversation with voice and text support:
 - Real-time speech transcription (Speechmatics STT)
 - Message translation (Google Translate)
 - Voice input/output with browser TTS
 - Session status tracking
 - Both text and voice messaging support
+
+![End User Chat](./public/screenshots/02-chat-interface.png)
+
+### Support Agent Interface
+IT support agents receive and respond to end user requests:
+- Same real-time chat features
+- Multiple concurrent sessions support
+- Auto-matching with end users
+
+![Support Agent Chat](./public/screenshots/03-support-interface.png)
 
 ## 🏗️ System Architecture
 
